@@ -22,7 +22,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "tsx scripts/reset-db.ts",
     "smoke": "tsx scripts/smoke.ts",
-    "vercel-build": "prisma migrate deploy && tsx prisma/seed.ts && next build"
+    "vercel-build": "sh scripts/vercel-build.sh"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",

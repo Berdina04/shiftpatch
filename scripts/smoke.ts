@@ -1,6 +1,8 @@
 // Read-only smoke check for a deployed ShiftPatch (plan.md: production gets
 // no data-changing tests). Logs in every seed user and reads the shift list.
 // Usage: npm run smoke -- https://your-app.vercel.app
+export {};
+
 const baseUrl = (process.argv[2] ?? process.env.SMOKE_BASE_URL ?? "").replace(/\/$/, "");
 if (!baseUrl) {
   console.error("Usage: npm run smoke -- <base-url>   (or set SMOKE_BASE_URL)");
