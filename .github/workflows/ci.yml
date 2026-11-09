@@ -1,3 +1,6 @@
+# Runs on every pull request and on pushes to main. All steps must pass:
+# typecheck, ESLint, Vitest integration tests on a real Postgres (service
+# container below), the production build, then Playwright against that build.
 name: CI
 
 on:

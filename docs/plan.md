@@ -15,8 +15,8 @@ Budget: 8 hours this week, no buffer. Every part ends deployed and working end t
 | 5 — Timesheets | Not started |
 
 Part 1 notes:
-- Migrations and the seed run in the **production** build only (`scripts/vercel-build.sh`). Neon preview branching is off, so preview deployments share the production database and don't migrate it. Decide before Part 2 (the first writes) whether to turn on Neon preview branching (Vercel → Storage → shiftpatch-db → "Create database branch for deployment: Preview"). If it's on, previews can migrate their own branch.
-- Added beyond the spec: `POST /api/auth/logout` (clears the UI cookie) and database CHECK constraints (a filled shift always has a claimant; times are `HH:MM` and start ≠ end).
+- Neon preview branching is on: each preview deployment gets its own Neon branch, so `scripts/vercel-build.sh` runs migrations and the seed on every deployment.
+- Approved additions beyond the plan (2026-11-09): `POST /api/auth/logout` with a "Log out" link; database CHECK constraints (a filled shift always has a claimant; times are `HH:MM` and start ≠ end); case-insensitive login email; credentials seeded from Part 1; every role lands on the open-shift list until Parts 2–3 add their pages.
 
 ## Spec gaps and how we resolve them
 
