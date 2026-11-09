@@ -1,0 +1,85 @@
+// ShiftPatch data model. Seed data: docs/spec.md. Rules: docs/plan.md.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../lib/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  nurse
+  agency
+  admin
+}
+
+enum ShiftStatus {
+  open
+  filled
+}
+
+enum CredentialStatus {
+  pending
+  approved
+  rejected
+}
+
+model Agency {
+  id     String  @id
+  name   String
+  users  User[]
+  shifts Shift[]
+}
+
+// One login per row. Agency logins use the agencyId as their id
+// (plan.md: agency login returns user.id = agencyId).
+model User {
+  id           String  @id
+  email        String  @unique
+  name         String
+  role         Role
+  passwordHash String
+  agencyId     String?
+  agency       Agency? @relation(fields: [agencyId], references: [id])
+
+  credentials   Credential[]
+  claimedShifts Shift[]
+
+  createdAt DateTime @default(now())
+}
+
+model Credential {
+  id        String           @id
+  nurseId   String
+  nurse     User             @relation(fields: [nurseId], references: [id])
+  // Last day is the day before expiresOn (plan.md: the expiry date itself is not valid).
+  expiresOn DateTime         @db.Date
+  status    CredentialStatus @default(pending)
+  createdAt DateTime         @default(now())
+
+  @@index([nurseId])
+}
+
+// date/startTime/endTime are facility-local, as in the spec.
+// endTime < startTime means the shift ends the next day.
+model Shift {
+  id          String      @id
+  agencyId    String
+  agency      Agency      @relation(fields: [agencyId], references: [id])
+  role        String
+  date        DateTime    @db.Date
+  startTime   String      @db.VarChar(5)
+  endTime     String      @db.VarChar(5)
+  status      ShiftStatus @default(open)
+  claimedById String?
+  claimedBy   User?       @relation(fields: [claimedById], references: [id])
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([agencyId])
+  @@index([claimedById])
+  @@index([status])
+}

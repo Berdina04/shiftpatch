@@ -4,6 +4,20 @@ Source of truth: [spec.md](spec.md) (not modified). Stack and architecture decis
 
 Budget: 8 hours this week, no buffer. Every part ends deployed and working end to end.
 
+## Status
+
+| Part | Status |
+|---|---|
+| 1 — Login + shift list | **Done, pending merge of [PR #1](https://github.com/Berdina04/shiftpatch/pull/1).** Live at https://shiftpatch-phi.vercel.app; `npm run smoke -- https://shiftpatch-phi.vercel.app` passes (all 5 seed logins, 401s, shift shape). CI is green on PR #1. Vercel project `shiftpatch` deploys `main` to production. Neon `shiftpatch-db` (free, `iad1`) and `JWT_SECRET` are set for Production and Preview. The first live deploy came from the PR branch, because Vercel promotes a new project's first deployment to production; merging PR #1 redeploys the same code from `main`. |
+| 2 — Posting and claiming | Not started |
+| 3 — Cancel/no-show, admin, audit | Not started |
+| 4 — Credentials | Not started |
+| 5 — Timesheets | Not started |
+
+Part 1 notes:
+- Neon preview branching is on: each preview deployment gets its own Neon branch, so `scripts/vercel-build.sh` runs migrations and the seed on every deployment.
+- Approved additions beyond the plan (2026-11-09): `POST /api/auth/logout` with a "Log out" link; database CHECK constraints (a filled shift always has a claimant; times are `HH:MM` and start ≠ end); case-insensitive login email; credentials seeded from Part 1; every role lands on the open-shift list until Parts 2–3 add their pages.
+
 ## Spec gaps and how we resolve them
 
 | Gap in the spec | Resolution |
