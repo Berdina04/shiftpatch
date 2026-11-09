@@ -4,6 +4,20 @@ Source of truth: [spec.md](spec.md) (not modified). Stack and architecture decis
 
 Budget: 8 hours this week, no buffer. Every part ends deployed and working end to end.
 
+## Status
+
+| Part | Status |
+|---|---|
+| 1 — Login + shift list | **Done, pending merge of [PR #1](https://github.com/Berdina04/shiftpatch/pull/1).** Live at https://shiftpatch-phi.vercel.app; `npm run smoke -- https://shiftpatch-phi.vercel.app` passes (all 5 seed logins, 401s, shift shape). CI is green on PR #1. Vercel project `shiftpatch` deploys `main` to production. Neon `shiftpatch-db` (free, `iad1`) and `JWT_SECRET` are set for Production and Preview. The first live deploy came from the PR branch, because Vercel promotes a new project's first deployment to production; merging PR #1 redeploys the same code from `main`. |
+| 2 — Posting and claiming | Not started |
+| 3 — Cancel/no-show, admin, audit | Not started |
+| 4 — Credentials | Not started |
+| 5 — Timesheets | Not started |
+
+Part 1 notes:
+- Migrations and the seed run in the **production** build only (`scripts/vercel-build.sh`). Neon preview branching is off, so preview deployments share the production database and don't migrate it. Decide before Part 2 (the first writes) whether to turn on Neon preview branching (Vercel → Storage → shiftpatch-db → "Create database branch for deployment: Preview"). If it's on, previews can migrate their own branch.
+- Added beyond the spec: `POST /api/auth/logout` (clears the UI cookie) and database CHECK constraints (a filled shift always has a claimant; times are `HH:MM` and start ≠ end).
+
 ## Spec gaps and how we resolve them
 
 | Gap in the spec | Resolution |

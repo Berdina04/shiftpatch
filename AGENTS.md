@@ -33,7 +33,9 @@ First-time setup: `cp .env.example .env` (set `JWT_SECRET`), `npm install`, `npm
 | `npm run test:e2e` | Playwright against the production build on port 3100, using the test database (run `npm run build` first). |
 | `npm run smoke -- <url>` | Read-only smoke check of a deployed app: all 5 seed logins, 401s, shift shape. Safe on production. |
 
-CI (`.github/workflows/ci.yml`) runs typecheck, lint, Vitest and Playwright on every PR and on pushes to `main`. Vercel runs `npm run vercel-build` (migrate deploy, seed, build).
+CI (`.github/workflows/ci.yml`) runs typecheck, lint, Vitest and Playwright on every PR and on pushes to `main`. Vercel runs `npm run vercel-build`, which runs migrate deploy and the seed for production only, then builds.
+
+Production: https://shiftpatch-phi.vercel.app (Vercel project `shiftpatch`, Neon `shiftpatch-db`). Check it with `npm run smoke -- https://shiftpatch-phi.vercel.app`. Never run `npm test` or `npm run test:e2e` against it: they wipe their database.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
