@@ -36,7 +36,6 @@ Part 2 notes:
   - The credential check compares dates as numbers, not `YYYY-MM-DD` text.
   - Playwright: the stale tab pauses relative to its own clock; the agency's list is checked to update on its 10 s poll without a reload.
 - Open (2026-11-10): Neon's preview branch creation timed out on the last two preview deployments. Check the Neon project before Part 3, since every PR's preview needs it.
-- Preview database guard (approved 2026-11-10): `scripts/vercel-build.sh` first runs `scripts/check-preview-database.mjs`. A non-production build stops before migrating or seeding unless Neon's API confirms that both `DATABASE_URL` and `DATABASE_URL_UNPOOLED` are on branch `preview/<git branch>` and not the default branch. It needs `NEON_API_KEY` (sensitive, Preview only) in Vercel.
 - `npm run preview-flow -- <preview-url>` runs the full Part 2 flow against a PR preview. It refuses production and any deployment without its own Neon branch, and passes only on the first run per PR branch.
 
 ## Spec gaps and how we resolve them
