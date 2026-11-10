@@ -1,6 +1,9 @@
 // Calls Next route handlers directly with a real NextRequest.
 import { NextRequest } from "next/server";
+import { GET as agencyShiftsRoute } from "@/app/api/agencies/[agencyId]/shifts/route";
 import { POST as loginRoute } from "@/app/api/auth/login/route";
+import { POST as claimRoute } from "@/app/api/shifts/[id]/claim/route";
+import { GET as listShiftsRoute, POST as postShiftRoute } from "@/app/api/shifts/route";
 
 const BASE = "http://localhost:3000";
 
@@ -45,3 +48,31 @@ export const EMAILS = {
   james: "james.cook@example.com",
   alex: "alex.kim@example.com",
 } as const;
+
+// --- Part 2 routes ---------------------------------------------------------
+
+export const SPEC_NEW_SHIFT = { role: "RN", date: "2026-10-05", startTime: "07:00", endTime: "19:00" } as const;
+
+export function listShifts(token?: string) {
+  return listShiftsRoute(makeRequest("/api/shifts", { token }), {});
+}
+
+export function postShift(token: string | undefined, body: unknown = SPEC_NEW_SHIFT) {
+  return postShiftRoute(makeRequest("/api/shifts", { method: "POST", token, body }), {});
+}
+
+export function postShiftRaw(token: string, rawBody: string) {
+  return postShiftRoute(makeRequest("/api/shifts", { method: "POST", token, rawBody }), {});
+}
+
+export function claim(token: string | undefined, shiftId: string) {
+  return claimRoute(makeRequest(`/api/shifts/${shiftId}/claim`, { method: "POST", token }), {
+    params: Promise.resolve({ id: shiftId }),
+  });
+}
+
+export function agencyShifts(token: string | undefined, agencyId: string) {
+  return agencyShiftsRoute(makeRequest(`/api/agencies/${agencyId}/shifts`, { token }), {
+    params: Promise.resolve({ agencyId }),
+  });
+}

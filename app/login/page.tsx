@@ -3,7 +3,7 @@ import { getSessionUser } from "@/lib/session";
 import { LoginForm } from "./LoginForm";
 
 export default async function LoginPage() {
-  if (await getSessionUser()) redirect("/shifts");
+  if (await getSessionUser()) redirect("/");
   return (
     <main className="auth-page">
       <h1>ShiftPatch</h1>

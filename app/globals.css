@@ -139,3 +139,66 @@ button:disabled {
   flex-direction: column;
   gap: 0.5rem;
 }
+
+select {
+  font: inherit;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.shift {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.heading-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.banner {
+  border-radius: 6px;
+  padding: 0.6rem 0.9rem;
+  margin-bottom: 1rem;
+  border: 1px solid currentColor;
+}
+
+.banner-success {
+  color: var(--accent);
+}
+
+.banner-error {
+  color: var(--error);
+}
+
+.post-shift-form {
+  margin: 0 0 1rem;
+}
+
+.hint {
+  font-size: 0.85rem;
+}
+
+.status {
+  font-size: 0.85rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.status-open {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.status-filled {
+  color: var(--muted);
+}

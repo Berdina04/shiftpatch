@@ -1,4 +1,7 @@
 import { expect, test } from "@playwright/test";
+import { resetDb } from "./support/helpers";
+
+test.beforeAll(resetDb);
 
 test("Maria logs in and sees the open shifts", async ({ page }) => {
   await page.goto("/");

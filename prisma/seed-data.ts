@@ -1,6 +1,7 @@
 // Trial-start data, exactly as listed in docs/spec.md ("Sample data").
 import bcrypt from "bcryptjs";
 import type { PrismaClient } from "../lib/generated/prisma/client";
+import { dateOnly } from "../lib/shift-time";
 
 export const SEED_PASSWORD = "Trial2026!";
 
@@ -30,11 +31,6 @@ export const seedShifts = [
   { id: "shift-3", agencyId: "agency-b", role: "RN", date: "2026-10-04", startTime: "19:00", endTime: "07:00", status: "open", claimedById: null },
 ] as const;
 
-/** A YYYY-MM-DD date as the Date Prisma stores in a DATE column. */
-export function dateOnly(isoDate: string): Date {
-  return new Date(`${isoDate}T00:00:00.000Z`);
-}
-
 /**
  * Inserts any seed row that is missing and leaves existing rows alone, so
  * running it on every deploy never resets production state.
@@ -59,10 +55,13 @@ export async function seedDatabase(db: PrismaClient): Promise<void> {
   ]);
 }
 
-/** Deletes all data and restores the trial-start seed. */
+/**
+ * Deletes all data and restores the trial-start seed. RESTART IDENTITY also
+ * restarts shift_id_seq, so the next posted shift is shift-4 again.
+ */
 export async function resetDatabase(db: PrismaClient): Promise<void> {
   await db.$executeRawUnsafe(
-    'TRUNCATE TABLE "Shift", "Credential", "User", "Agency" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "AuditLog", "Shift", "Credential", "User", "Agency" RESTART IDENTITY CASCADE',
   );
   await seedDatabase(db);
 }
