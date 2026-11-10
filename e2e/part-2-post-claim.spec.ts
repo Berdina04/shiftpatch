@@ -1,13 +1,15 @@
 import { expect, test } from "@playwright/test";
-import { logIn, resetDb } from "./support/helpers";
+import { freezeTimers, logIn, resetDb } from "./support/helpers";
 
 test.beforeAll(resetDb);
 
-test("an agency posts a shift and Maria claims it; a stale tab gets 'already taken' and drops the row", async ({
+test("an agency posts, Maria claims; a stale tab gets 'already taken' and drops the row; the agency's poll shows the claim", async ({
   browser,
 }) => {
-  // Sunrise Health Staffing posts a shift.
+  // Sunrise Health Staffing posts a shift. Its page's clock is controlled so
+  // the test can run the 10 s poll on demand later.
   const agency = await (await browser.newContext()).newPage();
+  await agency.clock.install();
   await logIn(agency, "admin@sunrisehealth.example", /\/agency$/);
   await agency.getByTestId("agency-post-shift-button").click();
   await agency.getByLabel("Role").selectOption("RN");
@@ -19,6 +21,7 @@ test("an agency posts a shift and Maria claims it; a stale tab gets 'already tak
   const posted = agency.locator('[data-shift-id="shift-4"]');
   await expect(posted).toContainText("2026-12-01 · 07:00–19:00");
   await expect(posted).toContainText("Open");
+  await freezeTimers(agency);
 
   // Maria has the open list in two tabs.
   const maria = await browser.newContext();
@@ -27,13 +30,12 @@ test("an agency posts a shift and Maria claims it; a stale tab gets 'already tak
   const tab2 = await maria.newPage();
   // Tab 2's timers are frozen once loaded, so its 10 s poll can never run:
   // only the refresh after the 409 can update its list.
-  const start = Date.now();
-  await tab2.clock.install({ time: start });
+  await tab2.clock.install();
   await tab2.goto("/shifts");
   const row = (page: typeof tab1) => page.locator('[data-testid="shift-list-item"][data-shift-id="shift-4"]');
   await expect(row(tab1)).toBeVisible();
   await expect(row(tab2)).toBeVisible();
-  await tab2.clock.pauseAt(start + 5_000);
+  await freezeTimers(tab2);
 
   // Tab 1 claims it.
   await row(tab1).getByTestId("shift-claim-button").click();
@@ -48,9 +50,10 @@ test("an agency posts a shift and Maria claims it; a stale tab gets 'already tak
   // The other open shifts are still listed.
   await expect(tab2.getByTestId("shift-list-item")).toHaveCount(2);
 
-  // The agency sees the shift filled by Maria.
-  await agency.reload();
-  await expect(agency.locator('[data-shift-id="shift-4"]')).toContainText("Filled · nurse-1");
+  // The agency's list picks up the claim on its next 10 s poll, without a reload.
+  await expect(posted).toContainText("Open");
+  await agency.clock.runFor(10_000);
+  await expect(posted).toContainText("Filled · nurse-1");
 });
 
 test("James's expired credential shows the spec's error in the banner", async ({ page }) => {

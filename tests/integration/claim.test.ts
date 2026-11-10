@@ -148,6 +148,12 @@ describe("POST /api/shifts/:id/claim", () => {
       expect((await claim(nurse.token, await pastShift())).status).toBe(200);
     });
 
+    it("compares dates as dates: an overnight shift ending in year 10000 isn't covered by a 2027 expiry", async () => {
+      // As text, the end date "+010000-01-01" would sort before today and be skipped.
+      const id = await createShift({ date: "9999-12-31", startTime: "19:00", endTime: "07:00" });
+      await expectError(await claim(maria, id), 403, "Credential expired, cannot claim shift");
+    });
+
     it("must be valid through the end of an overnight shift (expiry date itself is not valid)", async () => {
       // Maria's credential expires 2027-01-01; this shift ends 2027-01-01 07:00.
       const overnight = await createShift({ date: "2026-12-31", startTime: "19:00", endTime: "07:00" });

@@ -88,13 +88,36 @@ export async function requireUser(req: NextRequest): Promise<SessionUser> {
 
 type AuthedHandler<Ctx> = (req: NextRequest, user: SessionUser, ctx: Ctx) => Promise<Response>;
 
+/** Statuses that mean "you may not do this": logged, never audited (plan.md). */
+const DENIED_STATUSES = new Set([401, 403, 409]);
+
+/**
+ * One JSON line per denied request in the server logs. The audit table only
+ * records successful changes. Never includes the token or the request body.
+ */
+export function logDenied(req: NextRequest, user: SessionUser | null, err: HttpError): void {
+  console.warn(
+    JSON.stringify({
+      event: "request.denied",
+      method: req.method,
+      path: req.nextUrl.pathname,
+      status: err.status,
+      error: err.message,
+      userId: user?.id ?? null,
+      role: user?.role ?? null,
+    }),
+  );
+}
+
 /** Wraps a route handler so it only runs for an authenticated user. */
 export function withAuth<Ctx = unknown>(handler: AuthedHandler<Ctx>) {
   return async (req: NextRequest, ctx: Ctx): Promise<Response> => {
+    let user: SessionUser | null = null;
     try {
-      const user = await requireUser(req);
+      user = await requireUser(req);
       return await handler(req, user, ctx);
     } catch (err) {
+      if (err instanceof HttpError && DENIED_STATUSES.has(err.status)) logDenied(req, user, err);
       return toErrorResponse(err);
     }
   };

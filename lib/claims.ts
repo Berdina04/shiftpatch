@@ -12,7 +12,7 @@ import type { SessionUser } from "./auth";
 import { getDb } from "./db";
 import type { Prisma } from "./generated/prisma/client";
 import { HttpError } from "./http";
-import { addDays, isoDate, shiftEndDate, shiftsOverlap, todayIso, type ShiftTimes } from "./shift-time";
+import { addDays, shiftEndDate, shiftsOverlap, startOfTodayUtc, type ShiftTimes } from "./shift-time";
 import { shiftSelect, toShiftDto, type ShiftDto } from "./shifts";
 
 export const CLAIM_ERRORS = {
@@ -70,10 +70,9 @@ async function assertCredentialCovers(tx: Prisma.TransactionClient, nurseId: str
   });
   if (approved.length === 0) throw new HttpError(403, CLAIM_ERRORS.noApprovedCredential);
 
-  const today = todayIso();
-  const endDate = isoDate(shiftEndDate(shift));
-  const mustBeValidOn = today > endDate ? today : endDate;
-  if (!approved.some((c) => isoDate(c.expiresOn) > mustBeValidOn)) {
+  // Compared as numbers, not YYYY-MM-DD text, which breaks past year 9999.
+  const mustBeValidOn = Math.max(startOfTodayUtc().getTime(), shiftEndDate(shift).getTime());
+  if (!approved.some((c) => c.expiresOn.getTime() > mustBeValidOn)) {
     throw new HttpError(403, CLAIM_ERRORS.credentialExpired);
   }
 }

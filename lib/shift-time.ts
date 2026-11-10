@@ -24,9 +24,9 @@ export function isCalendarDate(value: string): boolean {
   return !Number.isNaN(parsed.getTime()) && isoDate(parsed) === value;
 }
 
-/** Today's date as YYYY-MM-DD (UTC; the spec defines no facility timezone). */
-export function todayIso(now = new Date()): string {
-  return isoDate(now);
+/** Today as a DATE value, UTC midnight (the spec defines no facility timezone). */
+export function startOfTodayUtc(now = new Date()): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
 export type ShiftTimes = { date: Date; startTime: string; endTime: string };
