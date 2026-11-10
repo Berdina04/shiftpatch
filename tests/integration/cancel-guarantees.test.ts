@@ -9,6 +9,7 @@ import { CLAIM_ERRORS } from "@/lib/claims";
 import { db, resetToSeed } from "../support/db";
 import { auditRows, cancellationRows, createNurse, createShift, shiftRow } from "../support/fixtures";
 import { cancel, claim, EMAILS, tokenFor } from "../support/http";
+import { untilSomeoneWaitsForALock } from "../support/locks";
 
 const ROUNDS = Array.from({ length: 10 }, (_, i) => i + 1);
 
@@ -121,26 +122,13 @@ describe("a cancel that waited on a concurrent change acts on the shift as it is
   // nurse had claimed it, and commits. A cancel that read the shift before
   // waiting would still see the old claimant.
 
-  /** Resolves once some session in this database is waiting for a row lock. */
-  async function untilACancelWaits(): Promise<void> {
-    const deadline = Date.now() + 5_000;
-    while (Date.now() < deadline) {
-      const [{ waiting }] = await db().$queryRaw<{ waiting: number }[]>`
-        SELECT count(*)::int AS waiting FROM pg_stat_activity
-        WHERE datname = current_database() AND wait_event_type = 'Lock'`;
-      if (waiting > 0) return;
-      await new Promise((r) => setTimeout(r, 20));
-    }
-    throw new Error("the cancel never waited for the shift's row lock");
-  }
-
   async function cancelWhileClaimantChanges(shiftId: string, to: Nurse, body: unknown): Promise<Response> {
     let pending: Promise<Response> | undefined;
     await db().$transaction(
       async (tx) => {
         await tx.$queryRaw`SELECT "id" FROM "Shift" WHERE "id" = ${shiftId} FOR UPDATE`;
         pending = cancel(agencyA, shiftId, body);
-        await untilACancelWaits();
+        await untilSomeoneWaitsForALock();
         await tx.$executeRaw`UPDATE "Shift" SET "claimedById" = ${to.id} WHERE "id" = ${shiftId}`;
       },
       { timeout: 15_000 },

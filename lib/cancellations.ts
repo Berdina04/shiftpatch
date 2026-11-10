@@ -35,7 +35,10 @@ const CancelBody = z.object(
     reason: z.enum(CANCEL_REASONS, { error: CANCEL_ERRORS.badReason }),
     // Optional (not in the spec): the nurse the caller's page showed. If
     // another nurse holds the shift by now, the cancel is refused (409), so a
-    // stale page can't mark the wrong nurse as a no-show.
+    // stale page can't mark the wrong nurse as a no-show. It names the nurse,
+    // not one claim: if the same nurse cancelled and claimed the shift again,
+    // the cancel goes through. Accepted (plan.md, Part 3 notes): a no-show is
+    // about the nurse, who is still the one assigned.
     nurseId: z.string({ error: CANCEL_ERRORS.badNurseId }).optional(),
   },
   { error: "Request body must be a JSON object" },

@@ -16,6 +16,9 @@ test("an agency marks a no-show; the admin's dashboard shows the shift open with
   await expect(badge).toHaveText("filled");
   await expect(adminRow).toContainText("Maria Lopez (nurse-1)");
   await expect(adminRow).not.toContainText("reopened");
+  // The admin's reopen control has no reason preselected either.
+  await expect(adminRow.getByLabel("Reason")).toHaveValue("");
+  await expect(adminRow.getByTestId("shift-cancel-button")).toBeDisabled();
   await expect(admin.getByTestId("audit-log-table")).not.toContainText("shift.cancelled");
   await freezeTimers(admin);
 
@@ -24,8 +27,14 @@ test("an agency marks a no-show; the admin's dashboard shows the shift open with
   await logIn(agency, "admin@sunrisehealth.example", /\/agency$/);
   const agencyRow = agency.locator('[data-shift-id="shift-2"]');
   await expect(agencyRow).toContainText("Filled · nurse-1");
-  await agencyRow.getByLabel("Reason").selectOption("no-show");
-  await agencyRow.getByTestId("shift-cancel-button").click();
+  // No reason is preselected: the button stays disabled until one is picked.
+  const reason = agencyRow.getByLabel("Reason");
+  const cancelButton = agencyRow.getByTestId("shift-cancel-button");
+  await expect(reason).toHaveValue("");
+  await expect(cancelButton).toBeDisabled();
+  await reason.selectOption("no-show");
+  await expect(cancelButton).toBeEnabled();
+  await cancelButton.click();
   await expect(agency.getByTestId("notification-banner")).toHaveText("Shift reopened (no-show)");
   await expect(agencyRow).toContainText("Open");
   await expect(agencyRow.getByTestId("shift-cancel-button")).toHaveCount(0);

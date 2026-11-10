@@ -5,8 +5,9 @@ import { CancelControl, requestCancel } from "@/app/components/CancelControl";
 import { NotificationBanner, type Banner } from "@/app/components/NotificationBanner";
 import { ShiftTimes } from "@/app/components/ShiftTimes";
 import { usePolled } from "@/app/components/useLiveShifts";
-import type { AdminDashboard as Dashboard, AdminShiftDto, AuditEntryDto } from "@/lib/admin";
+import type { AdminDashboard as Dashboard, AuditEntryDto } from "@/lib/admin";
 import { CANCEL_REASONS, type CancelReason } from "@/lib/cancel-reasons";
+import type { ShiftDto } from "@/lib/shifts";
 
 const selectDashboard = (body: unknown) => body as Dashboard;
 
@@ -15,7 +16,7 @@ export function AdminDashboard({ initial }: { initial: Dashboard }) {
   const [banner, setBanner] = useState<Banner | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
 
-  async function cancel(shift: AdminShiftDto, reason: CancelReason) {
+  async function cancel(shift: ShiftDto, reason: CancelReason) {
     setCancelling(shift.id);
     try {
       const result = await requestCancel(shift, reason);
@@ -50,43 +51,46 @@ export function AdminDashboard({ initial }: { initial: Dashboard }) {
               </tr>
             </thead>
             <tbody>
-              {data.shifts.map((shift) => (
-                <tr key={shift.id} data-shift-id={shift.id}>
-                  <td className="nowrap">{shift.id}</td>
-                  <td>{shift.agencyName}</td>
-                  <td>{shift.role}</td>
-                  <td>
-                    <ShiftTimes shift={shift} />
-                  </td>
-                  <td>
-                    <div className="status-cell">
-                      <span data-testid="admin-shift-status-badge" className={`status status-${shift.status}`}>
-                        {shift.status}
-                      </span>
-                      {shift.lastCancellation && (
-                        <span
-                          className="marker"
-                          title={`Latest cancellation: ${shift.lastCancellation.reason}, ${shift.lastCancellation.previousNurseId}, ${formatTime(shift.lastCancellation.cancelledAt)}`}
-                        >
-                          reopened ({shift.lastCancellation.reason})
+              {data.shifts.map((shift) => {
+                const { claimedByName = null, lastCancellation = null } = data.shiftDetails[shift.id] ?? {};
+                return (
+                  <tr key={shift.id} data-shift-id={shift.id}>
+                    <td className="nowrap">{shift.id}</td>
+                    <td>{shift.agencyName}</td>
+                    <td>{shift.role}</td>
+                    <td>
+                      <ShiftTimes shift={shift} />
+                    </td>
+                    <td>
+                      <div className="status-cell">
+                        <span data-testid="admin-shift-status-badge" className={`status status-${shift.status}`}>
+                          {shift.status}
                         </span>
+                        {lastCancellation && (
+                          <span
+                            className="marker"
+                            title={`Latest cancellation: ${lastCancellation.reason}, ${lastCancellation.previousNurseId}, ${formatTime(lastCancellation.cancelledAt)}`}
+                          >
+                            reopened ({lastCancellation.reason})
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td>{shift.claimedBy ? `${claimedByName ?? shift.claimedBy} (${shift.claimedBy})` : "—"}</td>
+                    <td>
+                      {shift.status === "filled" && (
+                        <CancelControl
+                          reasons={CANCEL_REASONS}
+                          label="Reopen shift"
+                          busy={cancelling === shift.id}
+                          disabled={cancelling !== null}
+                          onCancel={(reason) => cancel(shift, reason)}
+                        />
                       )}
-                    </div>
-                  </td>
-                  <td>{shift.claimedBy ? `${shift.claimedByName ?? shift.claimedBy} (${shift.claimedBy})` : "—"}</td>
-                  <td>
-                    {shift.status === "filled" && (
-                      <CancelControl
-                        reasons={CANCEL_REASONS}
-                        label="Reopen shift"
-                        busy={cancelling === shift.id}
-                        disabled={cancelling !== null}
-                        onCancel={(reason) => cancel(shift, reason)}
-                      />
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
