@@ -65,8 +65,9 @@ model Credential {
 
 // date/startTime/endTime are facility-local, as in the spec.
 // endTime < startTime means the shift ends the next day.
+// New ids are shift-<n> from shift_id_seq (plan.md); the seed inserts shift-1..3 itself.
 model Shift {
-  id          String      @id
+  id          String      @id @default(dbgenerated("('shift-'::text || nextval('shift_id_seq'::regclass))"))
   agencyId    String
   agency      Agency      @relation(fields: [agencyId], references: [id])
   role        String
@@ -82,4 +83,19 @@ model Shift {
   @@index([agencyId])
   @@index([claimedById])
   @@index([status])
+}
+
+// Append-only record of successful changes, written in the same transaction
+// as the change itself (plan.md). Denied attempts go to server logs instead.
+model AuditLog {
+  id        BigInt   @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  actorId   String
+  actorRole Role
+  action    String // "shift.posted", "shift.claimed"
+  shiftId   String
+  details   Json
+
+  @@index([shiftId])
+  @@index([createdAt])
 }

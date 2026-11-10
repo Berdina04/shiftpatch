@@ -25,7 +25,7 @@ export function LoginForm() {
         setError(body?.error ?? "Login failed, please try again");
         return;
       }
-      router.replace("/shifts");
+      router.replace("/");
       router.refresh();
     } catch {
       setError("Network error, please try again");

@@ -1,6 +1,7 @@
+import { AppHeader } from "@/app/components/AppHeader";
 import { requireSessionUser } from "@/lib/session";
-import { listShifts, type ShiftDto } from "@/lib/shifts";
-import { LogoutButton } from "./LogoutButton";
+import { listShifts } from "@/lib/shifts";
+import { OpenShiftList } from "./OpenShiftList";
 
 export default async function ShiftsPage() {
   const user = await requireSessionUser();
@@ -8,39 +9,9 @@ export default async function ShiftsPage() {
 
   return (
     <main className="page">
-      <header className="topbar">
-        <strong>ShiftPatch</strong>
-        <span className="muted">
-          {user.name} · {user.role}
-        </span>
-        <LogoutButton />
-      </header>
-
+      <AppHeader user={user} />
       <h1>Open shifts</h1>
-      {shifts.length === 0 ? (
-        <p className="muted">No open shifts right now.</p>
-      ) : (
-        <ul className="shift-list">
-          {shifts.map((shift) => (
-            <ShiftListItem key={shift.id} shift={shift} />
-          ))}
-        </ul>
-      )}
+      <OpenShiftList initialShifts={shifts} canClaim={user.role === "nurse"} />
     </main>
-  );
-}
-
-function ShiftListItem({ shift }: { shift: ShiftDto }) {
-  const overnight = shift.endTime < shift.startTime;
-  return (
-    <li className="card shift" data-testid="shift-list-item" data-shift-id={shift.id}>
-      <div>
-        <strong>{shift.role}</strong> · {shift.agencyName}
-      </div>
-      <div className="muted">
-        {shift.date} · {shift.startTime}–{shift.endTime}
-        {overnight && " (+1 day)"}
-      </div>
-    </li>
   );
 }

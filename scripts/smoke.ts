@@ -1,5 +1,6 @@
 // Read-only smoke check for a deployed ShiftPatch (plan.md: production gets
-// no data-changing tests). Logs in every seed user and reads the shift list.
+// no data-changing tests). Logs in every seed user, reads the shift list and
+// the agency-scoped lists. Only GETs after login: never posts or claims.
 // Usage: npm run smoke -- https://your-app.vercel.app
 export {};
 
@@ -25,6 +26,7 @@ const SEED_SHIFTS = [
   { id: "shift-3", agencyId: "agency-b", agencyName: "Metro Care Partners", role: "RN", date: "2026-10-04", startTime: "19:00", endTime: "07:00" },
 ];
 
+const tokens: Record<string, string> = {};
 let failures = 0;
 async function check(name: string, fn: () => Promise<void>) {
   try {
@@ -81,6 +83,7 @@ for (const u of USERS) {
     assert(same(Object.keys(body).sort(), ["token", "user"]), `login keys ${Object.keys(body)}`);
     assert(same(body.user, { id: u.id, name: u.name, role: u.role }), `user ${JSON.stringify(body.user)}`);
     assert(/httponly/i.test(res.headers.get("set-cookie") ?? ""), "no httpOnly session cookie");
+    tokens[u.id] = body.token;
 
     const list = await fetch(`${baseUrl}/api/shifts`, { headers: { authorization: `Bearer ${body.token}` } });
     assert(list.status === 200, `shifts status ${list.status}`);
@@ -98,6 +101,45 @@ for (const u of USERS) {
     }
   });
 }
+
+async function getAs(userId: string, path: string) {
+  assert(tokens[userId], `no token for ${userId} (login failed above)`);
+  return fetch(`${baseUrl}${path}`, { headers: { authorization: `Bearer ${tokens[userId]}` } });
+}
+
+for (const agencyId of ["agency-a", "agency-b"]) {
+  await check(`${agencyId} reads its own shifts`, async () => {
+    const res = await getAs(agencyId, `/api/agencies/${agencyId}/shifts`);
+    assert(res.status === 200, `status ${res.status}`);
+    const body = await res.json();
+    assert(same(Object.keys(body).sort(), ["agencyId", "shifts"]), `keys ${Object.keys(body)}`);
+    assert(body.agencyId === agencyId, `agencyId ${body.agencyId}`);
+    for (const s of body.shifts) {
+      assert(same(Object.keys(s).sort(), SHIFT_KEYS), `shift ${s.id} keys ${Object.keys(s)}`);
+      assert(s.agencyId === agencyId, `shift ${s.id} belongs to ${s.agencyId}`);
+    }
+    for (const seed of SEED_SHIFTS.filter((x) => x.agencyId === agencyId)) {
+      assert(body.shifts.some((s: { id: string }) => s.id === seed.id), `${seed.id} missing`);
+    }
+  });
+}
+
+for (const [userId, path] of [
+  ["agency-b", "/api/agencies/agency-a/shifts"],
+  ["nurse-1", "/api/agencies/agency-a/shifts"],
+] as const) {
+  await check(`${userId} reading ${path} is 403`, async () => {
+    const res = await getAs(userId, path);
+    assert(res.status === 403, `status ${res.status}`);
+    const body = await res.json();
+    assert(same(body, { error: "You can only view your own agency's shifts" }), `body ${JSON.stringify(body)}`);
+  });
+}
+
+await check("admin reads an agency's shifts", async () => {
+  const res = await getAs("admin-1", "/api/agencies/agency-b/shifts");
+  assert(res.status === 200, `status ${res.status}`);
+});
 
 console.log(failures === 0 ? "Smoke check passed." : `Smoke check FAILED (${failures}).`);
 process.exit(failures === 0 ? 0 : 1);

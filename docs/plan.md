@@ -8,8 +8,8 @@ Budget: 8 hours this week, no buffer. Every part ends deployed and working end t
 
 | Part | Status |
 |---|---|
-| 1 — Login + shift list | **Done, pending merge of [PR #1](https://github.com/Berdina04/shiftpatch/pull/1).** Live at https://shiftpatch-phi.vercel.app; `npm run smoke -- https://shiftpatch-phi.vercel.app` passes (all 5 seed logins, 401s, shift shape). CI is green on PR #1. Vercel project `shiftpatch` deploys `main` to production. Neon `shiftpatch-db` (free, `iad1`) and `JWT_SECRET` are set for Production and Preview. The first live deploy came from the PR branch, because Vercel promotes a new project's first deployment to production; merging PR #1 redeploys the same code from `main`. |
-| 2 — Posting and claiming | Not started |
+| 1 — Login + shift list | **Done, merged ([PR #1](https://github.com/Berdina04/shiftpatch/pull/1)).** Production (https://shiftpatch-phi.vercel.app) serves `main` (`097c646`); `npm run smoke -- https://shiftpatch-phi.vercel.app` passes (all 5 seed logins, 401s, shift shape). Vercel project `shiftpatch`; Neon `shiftpatch-db` (free, `iad1`) and `JWT_SECRET` are set for Production and Preview. |
+| 2 — Posting and claiming | **Done, pending merge of [PR #2](https://github.com/Berdina04/shiftpatch/pull/2).** CI is green on PR #2. Verified on the PR's preview deployment, which runs on its own Neon branch: agency-a posts (`shift-4`), Maria claims it, James gets 403; the spec examples (Maria claims `shift-1` → 200, James → 403), permission denials and a parallel overlap claim on Neon all pass, and so does the smoke check. Production gets only the read-only smoke check after merge (see notes). |
 | 3 — Cancel/no-show, admin, audit | Not started |
 | 4 — Credentials | Not started |
 | 5 — Timesheets | Not started |
@@ -17,6 +17,25 @@ Budget: 8 hours this week, no buffer. Every part ends deployed and working end t
 Part 1 notes:
 - Neon preview branching is on: each preview deployment gets its own Neon branch, so `scripts/vercel-build.sh` runs migrations and the seed on every deployment.
 - Approved additions beyond the plan (2026-11-09): `POST /api/auth/logout` with a "Log out" link; database CHECK constraints (a filled shift always has a claimant; times are `HH:MM` and start ≠ end); case-insensitive login email; credentials seeded from Part 1; every role lands on the open-shift list until Parts 2–3 add their pages.
+
+Part 2 notes:
+- **Production stays at the seed state** (decision 2026-11-10), so the spec examples keep working there (e.g. Maria claims `shift-1` → 200). No posts or claims on production: "Done when" is checked on the PR's preview deployment and its own Neon branch, and production gets only `npm run smoke`.
+- Claim transaction ([lib/claims.ts](../lib/claims.ts)), READ COMMITTED: lock the nurse's row (`SELECT … FOR UPDATE`), then 404 → credential 403 → taken 409 → overlap 409, then `UPDATE … WHERE status = 'open'` (0 rows → 409) and the audit insert, all in one transaction.
+- Approved additions beyond the plan (2026-11-10):
+  - `AuditLog` table; posting is audited (`shift.posted`) as well as claiming (`shift.claimed`).
+  - Shift ids come from the database sequence `shift_id_seq`; the next id after the seed is `shift-4`, and the reset script restarts it.
+  - `role` is `RN` or `LPN`; past dates can be posted (the spec's own example is past).
+  - The admin may read any agency's list (`GET /api/agencies/:agencyId/shifts`); an unknown agency is 404 for the admin and 403 for an agency.
+  - Error messages: 403 "Only agencies can post shifts" / "Only nurses can claim shifts" / "You can only view your own agency's shifts"; 404 "Shift not found" / "Agency not found"; 409 "Shift already taken" / "Shift overlaps another shift you hold"; 400 per field.
+  - "Today" in the credential check is the UTC date. "Credential expired, cannot claim shift" covers both "already expired" and "expires before the shift ends".
+  - New `/agency` page (own shifts + post form); agencies land there; the admin stays on `/shifts` until Part 3.
+  - Tests: the race uses 20 test-only nurses; the rollback test forces the audit insert to fail with a temporary trigger. Each guarantee test was checked by breaking the code it guards (no `AND status = 'open'`, no `FOR UPDATE`, audit after commit, no refresh after a 409) and seeing it fail.
+- Review ([reviews/part-2.md](reviews/part-2.md)): all five findings fixed (approved 2026-11-10).
+  - Tests pin their clock to 2026-11-10 (`tests/support/pin-clock.mjs`, in Vitest and in the server Playwright starts), so the spec examples keep passing after Maria's credential expires on 2027-01-01. Production is not pinned: from that date the spec's claim example returns 403 there (README).
+  - Denied requests (401, 403, 409) are logged as one JSON line (`request.denied`: method, path, status, error, caller id and role; no token or body). They are never audited.
+  - The credential check compares dates as numbers, not `YYYY-MM-DD` text.
+  - Playwright: the stale tab pauses relative to its own clock; the agency's list is checked to update on its 10 s poll without a reload.
+- `npm run preview-flow -- <preview-url>` runs the full Part 2 flow against a PR preview. It refuses production and any deployment without its own Neon branch, and passes only on the first run per PR branch.
 
 ## Spec gaps and how we resolve them
 

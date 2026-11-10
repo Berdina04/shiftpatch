@@ -20,6 +20,8 @@ npm run dev             # http://localhost:3000
 
 Log in as any user in [docs/spec.md](docs/spec.md) ("Sample data"). Every password is `Trial2026!`.
 
+Maria's seeded credential expires on 2027-01-01, so from that date the spec's claim example (Maria claims `shift-1`) returns 403; the tests pin their clock to 2026-11-10, so they keep passing.
+
 ## Tests
 
 Both suites need `npm run db:up` and wipe the database in `TEST_DATABASE_URL`.

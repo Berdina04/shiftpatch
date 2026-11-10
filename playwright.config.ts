@@ -1,9 +1,18 @@
 import { defineConfig, devices } from "@playwright/test";
-import { testProcessEnv } from "./tests/support/test-env";
+import { TEST_NOW, testProcessEnv } from "./tests/support/test-env";
 
 // Runs against a production build (`npm run build` first) on the test
 // database, which global-setup migrates and resets to the seed.
 const PORT = 3100;
+
+// The server's clock is pinned to TEST_NOW (see tests/support/pin-clock.mjs).
+// A file URL, so a path with spaces survives NODE_OPTIONS.
+const pinClock = new URL("./tests/support/pin-clock.mjs", import.meta.url).href;
+const serverEnv = {
+  ...testProcessEnv(),
+  SHIFTPATCH_TEST_NOW: TEST_NOW,
+  NODE_OPTIONS: [process.env.NODE_OPTIONS, `--import=${pinClock}`].filter(Boolean).join(" "),
+};
 
 export default defineConfig({
   testDir: "e2e",
@@ -21,7 +30,7 @@ export default defineConfig({
   webServer: {
     command: `npx next start --port ${PORT}`,
     url: `http://localhost:${PORT}/login`,
-    env: testProcessEnv() as Record<string, string>,
+    env: serverEnv as Record<string, string>,
     reuseExistingServer: false,
     timeout: 60_000,
   },
