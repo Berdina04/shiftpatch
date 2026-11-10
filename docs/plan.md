@@ -9,7 +9,7 @@ Budget: 8 hours this week, no buffer. Every part ends deployed and working end t
 | Part | Status |
 |---|---|
 | 1 — Login + shift list | **Done, merged ([PR #1](https://github.com/Berdina04/shiftpatch/pull/1)).** Production (https://shiftpatch-phi.vercel.app) serves `main` (`097c646`); `npm run smoke -- https://shiftpatch-phi.vercel.app` passes (all 5 seed logins, 401s, shift shape). Vercel project `shiftpatch`; Neon `shiftpatch-db` (free, `iad1`) and `JWT_SECRET` are set for Production and Preview. |
-| 2 — Posting and claiming | **Done, pending merge of [PR #2](https://github.com/Berdina04/shiftpatch/pull/2).** CI is green on PR #2. Verified on the PR's preview deployment, which runs on its own Neon branch: agency-a posts (`shift-4`), Maria claims it, James gets 403; the spec examples (Maria claims `shift-1` → 200, James → 403), permission denials and a parallel overlap claim on Neon all pass, and so does the smoke check. Production gets only the read-only smoke check after merge (see notes). |
+| 2 — Posting and claiming | **Done, merged ([PR #2](https://github.com/Berdina04/shiftpatch/pull/2)).** Production serves `main` (`691542c`): its build applied the Part 2 migration, and `npm run smoke -- https://shiftpatch-phi.vercel.app` passes (13 checks, including the agency route and its 403s); the smoke check's denied requests appear in the production logs as `request.denied` lines. CI was green on PR #2. The full flow (`npm run preview-flow`) passed on the PR's preview, on its own Neon branch, at `fbd40b0`. The previews for the review fixes never built: Neon's "Create database branch for deployment" step timed out twice, with no incident on Neon's or Vercel's status pages. So the review fixes were checked locally, in CI and by the production smoke check only. |
 | 3 — Cancel/no-show, admin, audit | Not started |
 | 4 — Credentials | Not started |
 | 5 — Timesheets | Not started |
@@ -35,6 +35,7 @@ Part 2 notes:
   - Denied requests (401, 403, 409) are logged as one JSON line (`request.denied`: method, path, status, error, caller id and role; no token or body). They are never audited.
   - The credential check compares dates as numbers, not `YYYY-MM-DD` text.
   - Playwright: the stale tab pauses relative to its own clock; the agency's list is checked to update on its 10 s poll without a reload.
+- Open (2026-11-10): Neon's preview branch creation timed out on the last two preview deployments. Check the Neon project before Part 3, since every PR's preview needs it.
 - `npm run preview-flow -- <preview-url>` runs the full Part 2 flow against a PR preview. It refuses production and any deployment without its own Neon branch, and passes only on the first run per PR branch.
 
 ## Spec gaps and how we resolve them

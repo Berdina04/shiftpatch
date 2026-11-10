@@ -23,6 +23,7 @@ Scripts are in `package.json`; first-time setup and tests are in `README.md`. Ag
 ## Deployments
 - Production: https://shiftpatch-phi.vercel.app (Vercel project `shiftpatch`, Neon database `shiftpatch-db`), deployed from `main`.
 - Each preview deployment gets its own Neon branch (Neon preview branching, set in Vercel), so every build runs migrations and the seed on its own database.
+- Never turn off Neon preview branching for previews: previews would then use production's database and migrate it.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
