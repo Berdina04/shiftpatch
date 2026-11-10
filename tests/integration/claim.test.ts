@@ -7,6 +7,7 @@ import { SEED_SHIFTS } from "../support/seed-expectations";
 let maria: string;
 let james: string;
 beforeAll(async () => {
+  await resetToSeed(); // logins need the seed users, whatever ran before
   maria = await tokenFor(EMAILS.maria);
   james = await tokenFor(EMAILS.james);
 });

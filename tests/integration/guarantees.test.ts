@@ -68,6 +68,7 @@ describe("rollback: the audit insert fails", () => {
   let maria: string;
   let agencyA: string;
   beforeAll(async () => {
+    await resetToSeed(); // logins need the seed users
     maria = await tokenFor(EMAILS.maria);
     agencyA = await tokenFor(EMAILS.agencyA);
   });

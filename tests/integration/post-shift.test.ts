@@ -6,6 +6,7 @@ import { agencyShifts, EMAILS, listShifts, postShift, postShiftRaw, SPEC_NEW_SHI
 let agencyA: string;
 let agencyB: string;
 beforeAll(async () => {
+  await resetToSeed(); // logins need the seed users, whatever ran before
   agencyA = await tokenFor(EMAILS.agencyA);
   agencyB = await tokenFor(EMAILS.agencyB);
 });

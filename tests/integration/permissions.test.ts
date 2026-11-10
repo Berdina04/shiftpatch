@@ -7,6 +7,7 @@ import { agencyShifts, claim, EMAILS, listShifts, postShift, tokenFor } from "..
 type Who = keyof typeof EMAILS;
 const tokens = {} as Record<Who, string>;
 beforeAll(async () => {
+  await resetToSeed(); // logins need the seed users, whatever ran before
   for (const [who, email] of Object.entries(EMAILS)) tokens[who as Who] = await tokenFor(email);
 });
 beforeEach(resetToSeed);

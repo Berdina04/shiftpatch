@@ -5,6 +5,7 @@ import { SEED_SHIFTS } from "../support/seed-expectations";
 
 const tokens: Record<keyof typeof EMAILS, string> = {} as never;
 beforeAll(async () => {
+  await resetToSeed(); // logins need the seed users, whatever ran before
   for (const [key, email] of Object.entries(EMAILS)) tokens[key as keyof typeof EMAILS] = await tokenFor(email);
 });
 beforeEach(resetToSeed);
