@@ -30,6 +30,12 @@ Part 2 notes:
   - "Today" in the credential check is the UTC date. "Credential expired, cannot claim shift" covers both "already expired" and "expires before the shift ends".
   - New `/agency` page (own shifts + post form); agencies land there; the admin stays on `/shifts` until Part 3.
   - Tests: the race uses 20 test-only nurses; the rollback test forces the audit insert to fail with a temporary trigger. Each guarantee test was checked by breaking the code it guards (no `AND status = 'open'`, no `FOR UPDATE`, audit after commit, no refresh after a 409) and seeing it fail.
+- Review ([reviews/part-2.md](reviews/part-2.md)): all five findings fixed (approved 2026-11-10).
+  - Tests pin their clock to 2026-11-10 (`tests/support/pin-clock.mjs`, in Vitest and in the server Playwright starts), so the spec examples keep passing after Maria's credential expires on 2027-01-01. Production is not pinned: from that date the spec's claim example returns 403 there (README).
+  - Denied requests (401, 403, 409) are logged as one JSON line (`request.denied`: method, path, status, error, caller id and role; no token or body). They are never audited.
+  - The credential check compares dates as numbers, not `YYYY-MM-DD` text.
+  - Playwright: the stale tab pauses relative to its own clock; the agency's list is checked to update on its 10 s poll without a reload.
+- `npm run preview-flow -- <preview-url>` runs the full Part 2 flow against a PR preview. It refuses production and any deployment without its own Neon branch, and passes only on the first run per PR branch.
 
 ## Spec gaps and how we resolve them
 
