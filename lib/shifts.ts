@@ -48,12 +48,15 @@ export function toShiftDto(row: ShiftRow): ShiftDto {
   };
 }
 
+/** Every shift list's order: by start, then id. */
+export const shiftOrder = [
+  { date: "asc" },
+  { startTime: "asc" },
+  { id: "asc" },
+] as const satisfies Prisma.ShiftOrderByWithRelationInput[];
+
 export async function listShifts(where: Prisma.ShiftWhereInput = {}): Promise<ShiftDto[]> {
-  const rows = await getDb().shift.findMany({
-    where,
-    select: shiftSelect,
-    orderBy: [{ date: "asc" }, { startTime: "asc" }, { id: "asc" }],
-  });
+  const rows = await getDb().shift.findMany({ where, select: shiftSelect, orderBy: [...shiftOrder] });
   return rows.map(toShiftDto);
 }
 

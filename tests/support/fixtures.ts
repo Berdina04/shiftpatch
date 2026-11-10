@@ -56,3 +56,14 @@ export async function auditRows(where: { shiftId?: string; action?: string } = {
   const rows = await db().auditLog.findMany({ where, orderBy: { id: "asc" } });
   return rows.map(({ actorId, actorRole, action, shiftId, details }) => ({ actorId, actorRole, action, shiftId, details }));
 }
+
+export async function cancellationRows(where: { shiftId?: string } = {}) {
+  const rows = await db().shiftCancellation.findMany({ where, orderBy: { id: "asc" } });
+  return rows.map(({ shiftId, reason, previousNurseId, cancelledById, cancelledByRole }) => ({
+    shiftId,
+    reason,
+    previousNurseId,
+    cancelledById,
+    cancelledByRole,
+  }));
+}

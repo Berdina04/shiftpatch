@@ -3,7 +3,7 @@
 import type { Prisma } from "./generated/prisma/client";
 import type { Role } from "./generated/prisma/enums";
 
-export type AuditAction = "shift.posted" | "shift.claimed";
+export type AuditAction = "shift.posted" | "shift.claimed" | "shift.cancelled";
 
 export type AuditEntry = {
   actor: { id: string; role: Role };

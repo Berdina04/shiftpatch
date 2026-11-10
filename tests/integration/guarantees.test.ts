@@ -1,10 +1,11 @@
 // The three Part 2 guarantees (plan.md, "Verified by"), on real Postgres with
-// real concurrent transactions. Route handlers are called in-process; the
+// real concurrent transactions, and the rollback for Part 3's cancel (its races:
+// cancel-guarantees.test.ts). Route handlers are called in-process; the
 // requests run in parallel against the database.
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { db, resetToSeed } from "../support/db";
 import { auditRows, createNurse, createShift, shiftRow } from "../support/fixtures";
-import { claim, EMAILS, postShift, tokenFor } from "../support/http";
+import { cancel, claim, EMAILS, postShift, tokenFor } from "../support/http";
 
 beforeEach(resetToSeed);
 
@@ -87,6 +88,16 @@ describe("rollback: the audit insert fails", () => {
 
     expect(res.status).toBe(500);
     expect(await db().shift.count()).toBe(3);
+    expect(await db().auditLog.count()).toBe(0);
+  });
+
+  it("a cancel returns 500, the shift stays filled and no history row is kept", async () => {
+    const res = await cancel(agencyA, "shift-2", { reason: "no-show" });
+
+    expect(res.status).toBe(500);
+    expect(await res.json()).toStrictEqual({ error: "Internal server error" });
+    expect(await shiftRow("shift-2")).toStrictEqual({ status: "filled", claimedBy: "nurse-1" });
+    expect(await db().shiftCancellation.count()).toBe(0);
     expect(await db().auditLog.count()).toBe(0);
   });
 });
