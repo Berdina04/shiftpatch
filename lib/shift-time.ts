@@ -60,3 +60,21 @@ export function shiftsOverlap(a: ShiftTimes, b: ShiftTimes): boolean {
   const y = shiftInterval(b);
   return x.start < y.end && y.start < x.end;
 }
+
+/** The shift's scheduled length in minutes, from the same interval as the overlap check: 19:00–07:00 is 720. */
+export function shiftMinutes(shift: ShiftTimes): number {
+  const { start, end } = shiftInterval(shift);
+  return end - start;
+}
+
+/** Minutes as hours, rounded to 2 decimals: 720 → 12, 690 → 11.5, 710 → 11.83. */
+export function minutesToHours(minutes: number): number {
+  return Math.round((minutes / 60) * 100) / 100;
+}
+
+/** Minutes for display: 720 → "12 h", 690 → "11 h 30 min", 0 → "0 h". */
+export function formatMinutes(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+}

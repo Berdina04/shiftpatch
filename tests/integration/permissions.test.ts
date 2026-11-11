@@ -1,10 +1,11 @@
-// Every Part 2 and Part 3 route × every seed role (plan.md, "Verified by:
-// Permissions"); for cancel, also × each reason.
+// Every Part 2, 3 and 5 route × every seed role (plan.md, "Verified by:
+// Permissions"); for cancel, also × each reason. Timesheet scoping (what
+// each role sees, not whether it may ask): timesheets.test.ts.
 // 401 without a token is covered for every route by route-auth.test.ts.
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { db, resetToSeed } from "../support/db";
 import { cancellationRows } from "../support/fixtures";
-import { adminDashboard, agencyShifts, cancel, claim, EMAILS, listShifts, postShift, tokenFor } from "../support/http";
+import { adminDashboard, agencyShifts, cancel, claim, EMAILS, listShifts, postShift, timesheets, tokenFor } from "../support/http";
 
 type Who = keyof typeof EMAILS;
 const tokens = {} as Record<Who, string>;
@@ -96,6 +97,12 @@ const matrix: Row[] = [
     route: "GET /api/admin/dashboard",
     call: (t) => adminDashboard(t),
     expected: { agencyA: [403, NOT_ADMIN], agencyB: [403, NOT_ADMIN], maria: [403, NOT_ADMIN], james: [403, NOT_ADMIN], alex: [200, OK] },
+  },
+  // Timesheets (plan.md, Part 5): every role may read its own scope.
+  {
+    route: "GET /api/timesheets",
+    call: (t) => timesheets(t),
+    expected: { agencyA: [200, OK], agencyB: [200, OK], maria: [200, OK], james: [200, OK], alex: [200, OK] },
   },
 ];
 

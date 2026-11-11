@@ -6,6 +6,7 @@ import { POST as loginRoute } from "@/app/api/auth/login/route";
 import { POST as cancelRoute } from "@/app/api/shifts/[id]/cancel/route";
 import { POST as claimRoute } from "@/app/api/shifts/[id]/claim/route";
 import { GET as listShiftsRoute, POST as postShiftRoute } from "@/app/api/shifts/route";
+import { GET as timesheetsRoute } from "@/app/api/timesheets/route";
 
 const BASE = "http://localhost:3000";
 
@@ -95,4 +96,10 @@ export function cancelRaw(token: string, shiftId: string, rawBody: string | unde
 
 export function adminDashboard(token: string | undefined) {
   return adminDashboardRoute(makeRequest("/api/admin/dashboard", { token }), {});
+}
+
+// --- Part 5 routes ---------------------------------------------------------
+
+export function timesheets(token: string | undefined) {
+  return timesheetsRoute(makeRequest("/api/timesheets", { token }), {});
 }

@@ -1,6 +1,7 @@
 // Read-only smoke check for a deployed ShiftPatch (plan.md: production gets
-// no data-changing tests). Logs in every seed user, reads the shift list and
-// the agency-scoped lists. Only GETs after login: never posts or claims.
+// no data-changing tests). Logs in every seed user, reads the shift list, the
+// agency-scoped lists and each role's timesheets. Only GETs after login: never
+// posts or claims.
 // Usage: npm run smoke -- https://your-app.vercel.app
 export {};
 
@@ -139,6 +140,54 @@ for (const [userId, path] of [
 await check("admin reads an agency's shifts", async () => {
   const res = await getAs("admin-1", "/api/agencies/agency-b/shifts");
   assert(res.status === 200, `status ${res.status}`);
+});
+
+// --- Part 5: timesheets (read-only; checks rules, not what is filled) --------
+const SHEET_KEYS = ["nurseId", "nurseName", "shifts", "totalScheduledHours", "totalScheduledMinutes"];
+const SHEET_SHIFT_KEYS = [...SHIFT_KEYS, "scheduledHours", "scheduledMinutes"].sort();
+const toMinutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3));
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+type SheetShift = { id: string; agencyId: string; status: string; claimedBy: string; startTime: string; endTime: string; scheduledMinutes: number; scheduledHours: number };
+type Sheet = { nurseId: string; totalScheduledMinutes: number; totalScheduledHours: number; shifts: SheetShift[] };
+
+await check("GET /api/timesheets without a token is 401", async () => {
+  const res = await fetch(`${baseUrl}/api/timesheets`);
+  assert(res.status === 401, `status ${res.status}`);
+});
+
+for (const u of USERS) {
+  await check(`${u.id} (${u.role}) reads timesheets: own scope, hours add up`, async () => {
+    const res = await getAs(u.id, "/api/timesheets");
+    assert(res.status === 200, `status ${res.status}`);
+    const body = await res.json();
+    assert(same(Object.keys(body), ["timesheets"]), `keys ${Object.keys(body)}`);
+    const sheets = body.timesheets as Sheet[];
+    if (u.role === "nurse") assert(same(sheets.map((s) => s.nurseId), [u.id]), `nurses ${sheets.map((s) => s.nurseId)}`);
+    for (const sheet of sheets) {
+      assert(same(Object.keys(sheet).sort(), SHEET_KEYS), `sheet ${sheet.nurseId} keys ${Object.keys(sheet)}`);
+      let total = 0;
+      for (const s of sheet.shifts) {
+        assert(same(Object.keys(s).sort(), SHEET_SHIFT_KEYS), `shift ${s.id} keys ${Object.keys(s)}`);
+        assert(s.status === "filled" && s.claimedBy === sheet.nurseId, `shift ${s.id} is ${s.status}, held by ${s.claimedBy}`);
+        if (u.role === "agency") assert(s.agencyId === u.id, `shift ${s.id} belongs to ${s.agencyId}`);
+        const length = (toMinutes(s.endTime) - toMinutes(s.startTime) + 24 * 60) % (24 * 60); // overnight wraps
+        assert(s.scheduledMinutes === length && s.scheduledHours === round2(length / 60), `shift ${s.id}: ${s.scheduledMinutes} min`);
+        total += s.scheduledMinutes;
+      }
+      assert(sheet.totalScheduledMinutes === total, `${sheet.nurseId} total ${sheet.totalScheduledMinutes} ≠ ${total}`);
+      assert(sheet.totalScheduledHours === round2(total / 60), `${sheet.nurseId} hours ${sheet.totalScheduledHours}`);
+    }
+  });
+}
+
+await check("/timesheets renders the timesheet-table, labelled as scheduled hours", async () => {
+  assert(tokens["nurse-1"], "no token for nurse-1 (login failed above)");
+  const res = await fetch(`${baseUrl}/timesheets`, { headers: { cookie: `shiftpatch_token=${tokens["nurse-1"]}` } });
+  assert(res.status === 200, `status ${res.status}`);
+  const html = await res.text();
+  assert(html.includes('data-testid="timesheet-table"'), "missing timesheet-table");
+  assert(html.includes("Scheduled hours — not actual time worked"), "missing the scheduled-hours label");
 });
 
 console.log(failures === 0 ? "Smoke check passed." : `Smoke check FAILED (${failures}).`);
