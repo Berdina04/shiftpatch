@@ -61,7 +61,7 @@ export async function seedDatabase(db: PrismaClient): Promise<void> {
  */
 export async function resetDatabase(db: PrismaClient): Promise<void> {
   await db.$executeRawUnsafe(
-    'TRUNCATE TABLE "AuditLog", "Shift", "Credential", "User", "Agency" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "AuditLog", "ShiftCancellation", "Shift", "Credential", "User", "Agency" RESTART IDENTITY CASCADE',
   );
   await seedDatabase(db);
 }

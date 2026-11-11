@@ -80,9 +80,29 @@ model Shift {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
+  cancellations ShiftCancellation[]
+
   @@index([agencyId])
   @@index([claimedById])
   @@index([status])
+}
+
+// The shift's cancellation history (plan.md, Part 3): one row per cancel,
+// written in the same transaction as the reopen. The admin's "reopened
+// (no-show / advance)" marker is the latest row.
+// No foreign keys to User (like AuditLog): an FK check would lock the nurse's
+// row, which a claim by that nurse locks first (lib/cancellations.ts).
+model ShiftCancellation {
+  id              BigInt   @id @default(autoincrement())
+  shiftId         String
+  shift           Shift    @relation(fields: [shiftId], references: [id])
+  reason          String // "no-show" | "advance" (CHECK constraint)
+  previousNurseId String
+  cancelledById   String
+  cancelledByRole Role
+  createdAt       DateTime @default(now())
+
+  @@index([shiftId, id])
 }
 
 // Append-only record of successful changes, written in the same transaction
@@ -92,7 +112,7 @@ model AuditLog {
   createdAt DateTime @default(now())
   actorId   String
   actorRole Role
-  action    String // "shift.posted", "shift.claimed"
+  action    String // "shift.posted", "shift.claimed", "shift.cancelled"
   shiftId   String
   details   Json
 

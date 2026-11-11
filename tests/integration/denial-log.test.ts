@@ -2,7 +2,7 @@
 // changes only (plan.md, Assumptions: Audit log).
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { db, resetToSeed } from "../support/db";
-import { agencyShifts, claim, EMAILS, listShifts, postShift, postShiftRaw, tokenFor } from "../support/http";
+import { agencyShifts, cancel, claim, EMAILS, listShifts, postShift, postShiftRaw, tokenFor } from "../support/http";
 
 let maria: string;
 let james: string;
@@ -48,6 +48,16 @@ describe("denied requests are logged, not audited", () => {
       "another agency's list (403)",
       () => agencyShifts(agencyB, "agency-a"),
       { method: "GET", path: "/api/agencies/agency-a/shifts", status: 403, error: "You can only view your own agency's shifts", userId: "agency-b", role: "agency" },
+    ],
+    [
+      "a nurse marking a no-show (403)",
+      () => cancel(maria, "shift-2", { reason: "no-show" }),
+      { method: "POST", path: "/api/shifts/shift-2/cancel", status: 403, error: "Nurses can only cancel in advance", userId: "nurse-1", role: "nurse" },
+    ],
+    [
+      "cancelling an open shift (409)",
+      () => cancel(agencyB, "shift-3", { reason: "advance" }),
+      { method: "POST", path: "/api/shifts/shift-3/cancel", status: 409, error: "Shift is not claimed", userId: "agency-b", role: "agency" },
     ],
     [
       "no token (401)",

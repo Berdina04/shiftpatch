@@ -1,7 +1,9 @@
 // Calls Next route handlers directly with a real NextRequest.
 import { NextRequest } from "next/server";
+import { GET as adminDashboardRoute } from "@/app/api/admin/dashboard/route";
 import { GET as agencyShiftsRoute } from "@/app/api/agencies/[agencyId]/shifts/route";
 import { POST as loginRoute } from "@/app/api/auth/login/route";
+import { POST as cancelRoute } from "@/app/api/shifts/[id]/cancel/route";
 import { POST as claimRoute } from "@/app/api/shifts/[id]/claim/route";
 import { GET as listShiftsRoute, POST as postShiftRoute } from "@/app/api/shifts/route";
 
@@ -75,4 +77,22 @@ export function agencyShifts(token: string | undefined, agencyId: string) {
   return agencyShiftsRoute(makeRequest(`/api/agencies/${agencyId}/shifts`, { token }), {
     params: Promise.resolve({ agencyId }),
   });
+}
+
+// --- Part 3 routes ---------------------------------------------------------
+
+export function cancel(token: string | undefined, shiftId: string, body: unknown) {
+  return cancelRoute(makeRequest(`/api/shifts/${shiftId}/cancel`, { method: "POST", token, body }), {
+    params: Promise.resolve({ id: shiftId }),
+  });
+}
+
+export function cancelRaw(token: string, shiftId: string, rawBody: string | undefined) {
+  return cancelRoute(makeRequest(`/api/shifts/${shiftId}/cancel`, { method: "POST", token, rawBody }), {
+    params: Promise.resolve({ id: shiftId }),
+  });
+}
+
+export function adminDashboard(token: string | undefined) {
+  return adminDashboardRoute(makeRequest("/api/admin/dashboard", { token }), {});
 }

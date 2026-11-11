@@ -10,7 +10,7 @@ Budget: 8 hours this week, no buffer. Every part ends deployed and working end t
 |---|---|
 | 1 — Login + shift list | **Done, merged ([PR #1](https://github.com/Berdina04/shiftpatch/pull/1)).** Production (https://shiftpatch-phi.vercel.app) serves `main` (`097c646`); `npm run smoke -- https://shiftpatch-phi.vercel.app` passes (all 5 seed logins, 401s, shift shape). Vercel project `shiftpatch`; Neon `shiftpatch-db` (free, `iad1`) and `JWT_SECRET` are set for Production and Preview. |
 | 2 — Posting and claiming | **Done, merged ([PR #2](https://github.com/Berdina04/shiftpatch/pull/2)).** Production serves `main` (`691542c`): its build applied the Part 2 migration, and `npm run smoke -- https://shiftpatch-phi.vercel.app` passes (13 checks, including the agency route and its 403s); the smoke check's denied requests appear in the production logs as `request.denied` lines. CI was green on PR #2. The full flow (`npm run preview-flow`) passed on the PR's preview, on its own Neon branch, at `fbd40b0`. The previews for the review fixes never built: Neon's "Create database branch for deployment" step timed out twice, with no incident on Neon's or Vercel's status pages. So the review fixes were checked locally, in CI and by the production smoke check only. |
-| 3 — Cancel/no-show, admin, audit | Not started |
+| 3 — Cancel/no-show, admin, audit | **Done in [PR #4](https://github.com/Berdina04/shiftpatch/pull/4).** CI green at `5263d71`. Preview check on PR #4's latest preview (`shiftpatch-k1wpo885f`, commit `5263d71`, on its own Neon branch `br-aged-lab-bcnlz4op`): `npm run preview-flow` passed (16 checks), and agency-a marking `shift-2` as a no-show returned 200 with the spec's body. Locally: typecheck, ESLint, Vitest (228 tests), build and Playwright (6 passed). Review ([reviews/part-3.md](reviews/part-3.md)): findings 2–4 fixed, finding 1 accepted as a known limitation (see notes). Production gets only the read-only smoke check after merge. |
 | 4 — Credentials | Not started |
 | 5 — Timesheets | Not started |
 
@@ -37,6 +37,45 @@ Part 2 notes:
   - Playwright: the stale tab pauses relative to its own clock; the agency's list is checked to update on its 10 s poll without a reload.
 - Open (2026-11-10): Neon's preview branch creation timed out on the last two preview deployments. Check the Neon project before Part 3, since every PR's preview needs it.
 - `npm run preview-flow -- <preview-url>` runs the full Part 2 flow against a PR preview. It refuses production and any deployment without its own Neon branch, and passes only on the first run per PR branch.
+
+Part 3 notes:
+- Review ([reviews/part-3.md](reviews/part-3.md)), decisions 2026-11-10:
+  - Fixed: 2 (one snapshot for the dashboard), 3 (no default reason), 4 (dashboard shifts in the spec's shape).
+  - Not fixed: 1, recorded as a known limitation below.
+- Approved additions beyond the plan (2026-11-10):
+  - `ShiftCancellation` table: one row per cancellation (shift, reason, previous nurse, who cancelled), written in the cancel's transaction. It has no foreign keys to `User` (see "No deadlock" below). The admin's marker is the latest row.
+  - Admin-only `GET /api/admin/dashboard` returns `{ shifts, shiftDetails, auditLog }`. Other roles get 403 "Only the admin can view the dashboard".
+    - `shifts`: every shift, in the spec's shape.
+    - `shiftDetails`: keyed by shift id, `{ claimedByName, lastCancellation }`. `lastCancellation` is the marker.
+    - `auditLog`: the newest 100 entries.
+    - All of it is read in one read-only `REPEATABLE READ` transaction, so a change that commits mid-read shows up everywhere in the response or nowhere.
+  - The admin lands on `/admin`. Cancel buttons:
+    - Agency and admin rows: a reason picker that starts on "Choose a reason". The button stays disabled until a reason is picked, so a no-show is never recorded by default.
+    - Nurses' "My shifts" on `/shifts`: advance only, one click.
+  - Error messages:
+    - 400: "reason must be no-show or advance" / "nurseId must be a string".
+    - 403: "Nurses can only cancel in advance" / "You can only cancel your own agency's shifts" / "You can only cancel your own shifts".
+    - 409: "Shift is not claimed" / "Shift is now held by another nurse".
+  - Optional `nurseId` in the cancel body: the nurse the caller's page showed. If another nurse holds the shift by then, the cancel returns 409, so a stale page can't mark the wrong nurse as a no-show. The UI always sends it; without it, the route behaves exactly as the spec says.
+- **Known limitation (decision 2026-11-10, review finding 1):** `nurseId` names the nurse, not one claim. Suppose Maria cancels `shift-2` and claims it again. An agency page loaded before that still shows Maria, and its cancel goes through against her new claim. This is accepted: a no-show is about the nurse, and she is still the one assigned, as the page shows. There is no claim version, and the spec routes are unchanged.
+- Cancel transaction ([lib/cancellations.ts](../lib/cancellations.ts)), READ COMMITTED:
+  1. Lock the shift row (`SELECT … FOR NO KEY UPDATE`).
+  2. Checks, in order: 400 reason → 403 nurse `no-show` → 404 → 403 another agency's shift → 409 open → 409 held by another nurse (`nurseId`) → 403 not your shift.
+  3. Reopen the shift, insert the history row and write the `shift.cancelled` audit entry, all in the same transaction.
+- No deadlock with claim: the shift row is the only lock a cancel waits for, and it waits for nothing once it holds it. The history row has no FK to `User`, and clearing `claimedById` runs no FK check, so a cancel never locks a nurse's row; a claim locks its nurse first, then at most the shift.
+  - Experiment: even with FKs from the history row to `User`, 50 rounds of each race produced no deadlock. A claim only waits on a shift row it read as open, while a cancel only holds a filled one.
+- Tests:
+  - The race tests accept only their expected statuses, so any 500 (a deadlock included) fails them.
+  - Stale-cancel test: the test holds the shift's row lock while it swaps the claimant, so the result doesn't depend on timing.
+  - Dashboard snapshot test: the test locks `AuditLog`, so the dashboard's audit read waits after its shift read, and commits a cancellation in that gap. The response must show the state from before the cancellation in every part.
+  - Each guarantee test was checked by breaking the code it guards:
+    - No row lock: double-cancel fails 9/10 rounds, and both stale-cancel tests fail.
+    - Audit written after commit: the rollback test fails.
+    - `nurseId` ignored: both `nurseId` tests fail.
+    - Injected 500s: the race tests fail.
+    - Parallel dashboard reads (the pre-review code): the snapshot test fails with the review's response.
+    - `no-show` preselected in the picker: the Part 3 Playwright test fails.
+  - Claim's conditional `UPDATE` is still guarded mainly by Part 2's 20-nurse race. The cancel-vs-claim race caught its removal in only 1 of 50 rounds.
 
 ## Spec gaps and how we resolve them
 

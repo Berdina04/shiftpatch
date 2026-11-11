@@ -65,7 +65,8 @@ test("James's expired credential shows the spec's error in the banner", async ({
 });
 
 test("the admin sees the open list without claim buttons", async ({ page }) => {
-  await logIn(page, "alex.kim@example.com", /\/shifts$/);
+  await logIn(page, "alex.kim@example.com", /\/admin$/); // the admin lands on the dashboard (Part 3)
+  await page.goto("/shifts");
   await expect(page.getByTestId("shift-list-item")).toHaveCount(2);
   await expect(page.getByTestId("shift-claim-button")).toHaveCount(0);
 });

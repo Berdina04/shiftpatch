@@ -7,14 +7,14 @@ import type { ShiftDto } from "@/lib/shifts";
 export const POLL_INTERVAL_MS = 10_000;
 
 /**
- * A shift list that polls `url` every 10 s (docs/decisions.md #4). `refresh()`
+ * Data that polls `url` every 10 s (docs/decisions.md #4). `refresh()`
  * refetches at once (used after a 409). Only the newest request may update the
- * list, so a slow, older poll can't bring back a shift that is already gone.
+ * data, so a slow, older poll can't bring back a state that is already gone.
+ * `select` turns the response body into the data; pass a stable function.
  */
-export function useLiveShifts(url: string, initial: ShiftDto[], options: { openOnly?: boolean } = {}) {
-  const { openOnly = false } = options;
+export function usePolled<T>(url: string, initial: T, select: (body: unknown) => T) {
   const router = useRouter();
-  const [shifts, setShifts] = useState(initial);
+  const [data, setData] = useState(initial);
   const latestRequest = useRef(0);
 
   const refresh = useCallback(async () => {
@@ -26,18 +26,18 @@ export function useLiveShifts(url: string, initial: ShiftDto[], options: { openO
         return;
       }
       if (!res.ok) return;
-      const body = (await res.json()) as { shifts: ShiftDto[] };
+      const body: unknown = await res.json();
       if (request !== latestRequest.current) return;
-      setShifts(openOnly ? body.shifts.filter((s) => s.status === "open") : body.shifts);
+      setData(select(body));
     } catch {
-      // Offline or a network blip: keep the current list; the next poll retries.
+      // Offline or a network blip: keep the current data; the next poll retries.
     }
-  }, [url, openOnly, router]);
+  }, [url, select, router]);
 
   /** A local change (e.g. after a claim) that in-flight polls must not overwrite. */
-  const update = useCallback((change: (current: ShiftDto[]) => ShiftDto[]) => {
+  const update = useCallback((change: (current: T) => T) => {
     latestRequest.current++;
-    setShifts(change);
+    setData(change);
   }, []);
 
   useEffect(() => {
@@ -45,5 +45,13 @@ export function useLiveShifts(url: string, initial: ShiftDto[], options: { openO
     return () => clearInterval(timer);
   }, [refresh]);
 
+  return { data, refresh, update };
+}
+
+const selectShifts = (body: unknown) => (body as { shifts: ShiftDto[] }).shifts;
+
+/** A shift list (`{ shifts }`) that polls `url` every 10 s. */
+export function useLiveShifts(url: string, initial: ShiftDto[]) {
+  const { data: shifts, refresh, update } = usePolled(url, initial, selectShifts);
   return { shifts, refresh, update };
 }
