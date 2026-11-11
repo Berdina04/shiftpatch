@@ -23,6 +23,13 @@ export function fileSizeProblem(size: number): string | null {
   return null;
 }
 
+/**
+ * GET /api/credentials: the credentials and the server's date (UTC). Pages
+ * label expiry with that date, refreshed on every poll, so a page left open
+ * past midnight agrees with the claim check (review of Part 4, finding 2).
+ */
+export type CredentialList<T> = { credentials: T[]; today: string };
+
 export type DisplayStatus = CredentialStatus | "expired";
 
 export const DISPLAY_STATUS_LABELS: Record<DisplayStatus, string> = {

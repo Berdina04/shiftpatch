@@ -2,21 +2,26 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import type { Banner } from "@/app/components/NotificationBanner";
-import { usePolled } from "@/app/components/useLiveShifts";
-import { CREDENTIAL_FILE_TYPES, DISPLAY_STATUS_LABELS, displayStatus, fileSizeProblem, formatBytes } from "@/lib/credential-rules";
+import { useCredentialList } from "@/app/components/useCredentialList";
+import {
+  CREDENTIAL_FILE_TYPES,
+  DISPLAY_STATUS_LABELS,
+  displayStatus,
+  fileSizeProblem,
+  formatBytes,
+  type CredentialList,
+} from "@/lib/credential-rules";
 import type { CredentialDto } from "@/lib/credentials";
 
-const selectCredentials = (body: unknown) => (body as { credentials: CredentialDto[] }).credentials;
-
-type Props = { initial: CredentialDto[]; today: string; onBanner: (banner: Banner) => void };
+type Props = { initial: CredentialList<CredentialDto>; onBanner: (banner: Banner) => void };
 
 /**
  * A nurse's credentials and the upload form (plan.md, Part 4). A new upload
  * is pending until the admin approves it; the list polls every 10 s, so an
  * approval shows up without a reload.
  */
-export function MyCredentials({ initial, today, onBanner }: Props) {
-  const { data: credentials, update } = usePolled("/api/credentials", initial, selectCredentials);
+export function MyCredentials({ initial, onBanner }: Props) {
+  const { credentials, today, upsert } = useCredentialList(initial);
   const fileInput = useRef<HTMLInputElement>(null);
   const [expiresOn, setExpiresOn] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -49,7 +54,7 @@ export function MyCredentials({ initial, today, onBanner }: Props) {
       const body = (await res.json().catch(() => null)) as (CredentialDto & { error?: string }) | null;
       if (res.ok && body) {
         onBanner({ kind: "success", text: "Credential uploaded, pending admin review" });
-        update((current) => [...current, body]);
+        upsert(body);
         if (fileInput.current) fileInput.current.value = "";
         setExpiresOn("");
         return;

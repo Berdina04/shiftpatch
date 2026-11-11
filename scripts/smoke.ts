@@ -174,11 +174,14 @@ for (const agencyId of ["agency-a", "agency-b"]) {
   });
 }
 
-await check("admin lists every credential", async () => {
+await check("admin lists every credential, with the server's date", async () => {
   const res = await getAs("admin-1", "/api/credentials");
   assert(res.status === 200, `status ${res.status}`);
-  const { credentials } = (await res.json()) as { credentials: Cred[] };
+  const { credentials, today } = (await res.json()) as { credentials: Cred[]; today: string };
   for (const seed of SEED_CREDENTIALS) assert(credentials.some((c) => c.id === seed.id), `${seed.id} missing`);
+  // The server's UTC date; a day either way allows for a check run at midnight.
+  const days = Math.abs(Date.parse(today) - Date.parse(new Date().toISOString().slice(0, 10))) / 86_400_000;
+  assert(/^\d{4}-\d{2}-\d{2}$/.test(today) && days <= 1, `today ${today}`);
 });
 
 const FILE_FORBIDDEN = "Only the nurse who uploaded it and the admin can open this file";

@@ -169,7 +169,8 @@ describe("GET /api/credentials", () => {
     await uploadedCredentialId(james);
     const res = await listCredentials(maria);
     expect(res.status).toBe(200);
-    expect(await res.json()).toStrictEqual({ credentials: [MARIA_SEEDED] });
+    // `today` is the server's UTC date (the pinned clock), for expiry labels.
+    expect(await res.json()).toStrictEqual({ credentials: [MARIA_SEEDED], today: "2026-11-10" });
 
     const jamesList = (await (await listCredentials(james)).json()).credentials;
     expect(jamesList.map((c: { id: string; status: string }) => [c.id, c.status])).toStrictEqual([
@@ -201,6 +202,7 @@ describe("GET /api/credentials", () => {
           { id: "cred-nurse-2", nurseId: "nurse-2", nurseName: "James Cook", expiresOn: "2026-06-01", status: "approved" },
           { id: "cred-1", nurseId: "nurse-2", nurseName: "James Cook", expiresOn: "2028-01-01", status: "rejected" },
         ],
+        today: "2026-11-10",
       });
     }
   });
@@ -230,7 +232,11 @@ describe("GET /api/credentials/:id/file", () => {
       "cache-control": "private, no-store",
       "x-content-type-options": "nosniff",
     });
-    expect(res.headers.get("content-security-policy")).toContain("sandbox");
+    // The exact policy, so any change to it is deliberate. Playwright checks that Chrome still
+    // shows the file (review of Part 4, finding 3).
+    expect(res.headers.get("content-security-policy")).toBe(
+      "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
+    );
   });
 
   it.each([

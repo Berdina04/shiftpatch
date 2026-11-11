@@ -124,7 +124,7 @@ export function ShiftBoard({ initialShifts, nurse }: { initialShifts: ShiftDto[]
         </section>
       )}
 
-      {nurse && <MyCredentials initial={nurse.credentials} today={nurse.today} onBanner={setBanner} />}
+      {nurse && <MyCredentials initial={{ credentials: nurse.credentials, today: nurse.today }} onBanner={setBanner} />}
     </>
   );
 }

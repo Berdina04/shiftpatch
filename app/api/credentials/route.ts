@@ -1,12 +1,14 @@
 import { withAuth } from "@/lib/auth";
 import { CREDENTIAL_ERRORS, listCredentials, parseStatusFilter, parseUpload, uploadCredential } from "@/lib/credentials";
 import { HttpError } from "@/lib/http";
+import { todayIsoUtc } from "@/lib/shift-time";
 
 // Nurse: own credentials. Admin: all (`?status=pending` is the review queue).
 // Agency: every nurse's credentials, status only. See lib/credentials.ts.
+// `today` is the server's UTC date, which pages use to label expiry.
 export const GET = withAuth(async (req, user) => {
   const status = parseStatusFilter(req.nextUrl.searchParams.get("status"));
-  return Response.json({ credentials: await listCredentials(user, status) });
+  return Response.json({ credentials: await listCredentials(user, status), today: todayIsoUtc() });
 });
 
 // A nurse uploads a credential: multipart/form-data with `file` (PDF, PNG or

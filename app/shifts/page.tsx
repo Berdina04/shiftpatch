@@ -1,7 +1,7 @@
 import { AppHeader } from "@/app/components/AppHeader";
 import { listNurseCredentials } from "@/lib/credentials";
 import { requireSessionUser } from "@/lib/session";
-import { isoDate, startOfTodayUtc } from "@/lib/shift-time";
+import { todayIsoUtc } from "@/lib/shift-time";
 import { listShifts } from "@/lib/shifts";
 import { ShiftBoard } from "./ShiftBoard";
 
@@ -13,7 +13,7 @@ export default async function ShiftsPage() {
     listShifts(),
     user.role === "nurse" ? listNurseCredentials(user.id) : null,
   ]);
-  const nurse = credentials ? { id: user.id, credentials, today: isoDate(startOfTodayUtc()) } : null;
+  const nurse = credentials ? { id: user.id, credentials, today: todayIsoUtc() } : null;
 
   return (
     <main className="page">

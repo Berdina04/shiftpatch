@@ -1,17 +1,15 @@
 "use client";
 
-import { usePolled } from "@/app/components/useLiveShifts";
-import { DISPLAY_STATUS_LABELS, displayStatus } from "@/lib/credential-rules";
+import { useCredentialList } from "@/app/components/useCredentialList";
+import { DISPLAY_STATUS_LABELS, displayStatus, type CredentialList } from "@/lib/credential-rules";
 import type { CredentialStatusDto } from "@/lib/credentials";
-
-const selectCredentials = (body: unknown) => (body as { credentials: CredentialStatusDto[] }).credentials;
 
 /**
  * Every nurse's credential status for an agency (plan.md, Part 4): status
  * and expiry only. Agencies can't open the files.
  */
-export function NurseCredentials({ initial, today }: { initial: CredentialStatusDto[]; today: string }) {
-  const { data: credentials } = usePolled("/api/credentials", initial, selectCredentials);
+export function NurseCredentials({ initial }: { initial: CredentialList<CredentialStatusDto> }) {
+  const { credentials, today } = useCredentialList(initial);
   return (
     <section className="section">
       <h2>Nurse credentials</h2>
