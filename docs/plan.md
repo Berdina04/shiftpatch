@@ -11,7 +11,7 @@ Budget: 8 hours this week, no buffer. Every part ends deployed and working end t
 | 1 — Login + shift list | **Done, merged ([PR #1](https://github.com/Berdina04/shiftpatch/pull/1)).** Production (https://shiftpatch-phi.vercel.app) serves `main` (`097c646`); `npm run smoke -- https://shiftpatch-phi.vercel.app` passes (all 5 seed logins, 401s, shift shape). Vercel project `shiftpatch`; Neon `shiftpatch-db` (free, `iad1`) and `JWT_SECRET` are set for Production and Preview. |
 | 2 — Posting and claiming | **Done, merged ([PR #2](https://github.com/Berdina04/shiftpatch/pull/2)).** Production serves `main` (`691542c`): its build applied the Part 2 migration, and `npm run smoke -- https://shiftpatch-phi.vercel.app` passes (13 checks, including the agency route and its 403s); the smoke check's denied requests appear in the production logs as `request.denied` lines. CI was green on PR #2. The full flow (`npm run preview-flow`) passed on the PR's preview, on its own Neon branch, at `fbd40b0`. The previews for the review fixes never built: Neon's "Create database branch for deployment" step timed out twice, with no incident on Neon's or Vercel's status pages. So the review fixes were checked locally, in CI and by the production smoke check only. |
 | 3 — Cancel/no-show, admin, audit | **Done in [PR #4](https://github.com/Berdina04/shiftpatch/pull/4).** CI green at `5263d71`. Preview check on PR #4's latest preview (`shiftpatch-k1wpo885f`, commit `5263d71`, on its own Neon branch `br-aged-lab-bcnlz4op`): `npm run preview-flow` passed (16 checks), and agency-a marking `shift-2` as a no-show returned 200 with the spec's body. Locally: typecheck, ESLint, Vitest (228 tests), build and Playwright (6 passed). Review ([reviews/part-3.md](reviews/part-3.md)): findings 2–4 fixed, finding 1 accepted as a known limitation (see notes). Production gets only the read-only smoke check after merge. |
-| 4 — Credentials | **Done in [PR #5](https://github.com/Berdina04/shiftpatch/pull/5), not merged (waiting for the owner's approval).** CI green at `2ee26ae`. Preview check on PR #5's preview (`shiftpatch-jb7g1x25b`, commit `2ee26ae`, on its own Neon branch `br-noisy-fire-bc171521`): `npm run preview-flow` passed (29 checks: Part 2's 16 and Part 4's 13). Locally: typecheck, ESLint, Vitest (322 tests), build, Playwright (9 passed), and `npm run smoke` against a local production build (21 checks). Production gets the migration and only the read-only smoke check after merge. |
+| 4 — Credentials | **Done in [PR #5](https://github.com/Berdina04/shiftpatch/pull/5), not merged (waiting for the owner's approval).** Review ([reviews/part-4.md](reviews/part-4.md)): findings 1–3 fixed in `833d0fe`; CI green at `833d0fe`. Preview checks, both on PR #5's own Neon branch `br-noisy-fire-bc171521`: at `2ee26ae` (`shiftpatch-jb7g1x25b`), `npm run preview-flow` passed (29 checks: Part 2's 16 and Part 4's 13). At `833d0fe` (`shiftpatch-4vc97mwgj`), read-only checks passed: `{ credentials, today }` for an agency, a nurse and the admin, the credential test IDs on `/shifts`, and the file route's headers. `preview-flow` wasn't rerun there, because the Neon branch kept the first run's data. Locally at `833d0fe`: typecheck, ESLint, Vitest (322 tests), build, Playwright (12 passed), and `npm run smoke` against a local production build (21 checks). Production gets the migration and only the read-only smoke check after merge. |
 | 5 — Timesheets | Not started |
 
 Part 1 notes:
@@ -78,6 +78,10 @@ Part 3 notes:
   - Claim's conditional `UPDATE` is still guarded mainly by Part 2's 20-nurse race. The cancel-vs-claim race caught its removal in only 1 of 50 rounds.
 
 Part 4 notes:
+- Review ([reviews/part-4.md](reviews/part-4.md)), decision 2026-11-11: all three findings fixed.
+  - 1: an upload response is merged into the nurse's list by id, so a poll that already brought the credential in doesn't leave two rows.
+  - 2: `GET /api/credentials` also returns the server's UTC date (`today`). The nurse's and the agency's lists label expiry with the date from each poll, so a page left open past midnight agrees with the claim check.
+  - 3: Playwright clicks "Open file" in the admin's queue and checks the new tab shows a real PNG and a one-page PDF. The Playwright project now runs `channel: "chromium"` (full Chromium in new headless mode), which has Chrome's PDF viewer. Vitest pins the file route's exact security policy.
 - Approved additions beyond the plan (2026-11-11):
   - Credential uploads, approvals and rejections are audited (`credential.uploaded` / `credential.approved` / `credential.rejected`). `AuditLog.shiftId` is now nullable, with a new `credentialId`; a CHECK requires exactly one. The dashboard's "Shift" column is now "Subject".
   - Agencies see every nurse's credential status and expiry (nurses aren't tied to one agency), never the file or a rejection reason.
@@ -91,7 +95,7 @@ Part 4 notes:
   - AGENTS.md working rule: never print files that hold credentials (`.env*`, `~/.npmrc`).
 - Routes ([lib/credentials.ts](../lib/credentials.ts)):
   - `POST /api/credentials` (nurse; multipart `file` + `expiresOn`) → 201, `pending`. Check order: 403 role → 400 body → file present → size → type → expiry.
-  - `GET /api/credentials` → `{ credentials }`. Nurse: own; admin: all, `?status=pending` is the queue; agency: `{ id, nurseId, nurseName, expiresOn, status }`. Oldest first.
+  - `GET /api/credentials` → `{ credentials, today }` (`today`: the server's UTC date, for expiry labels). Nurse: own; admin: all, `?status=pending` is the queue; agency: `{ id, nurseId, nurseName, expiresOn, status }`. Oldest first.
   - `GET /api/credentials/:id/file`: agency → 403; unknown → 404; another nurse → 403; no file → 404.
   - `POST /api/credentials/:id/review` (admin): `{ decision: "approved" }` or `{ decision: "rejected", reason }`.
   - Error messages:
@@ -106,6 +110,7 @@ Part 4 notes:
     - Upload audit written after commit: the rollback test fails.
     - File existence checked before permission: 6 file tests fail.
     - No size check in the form: the Playwright size test fails (the request is sent).
+    - Review fixes: the upload response appended again, the page's first date kept, or the file served as an `attachment`: each fails its new Playwright test. The default headless shell (no PDF viewer) fails the PDF check. A stricter policy (`default-src 'none'; sandbox`) still shows both files in Chrome, but fails the pinned-policy Vitest test.
   - Rollback tests make the `CredentialFile` insert or the `AuditLog` insert fail with a temporary trigger.
 - Open: Vitest prints a `pg` deprecation warning ("client.query() when the client is already executing a query") from the Part 3 dashboard query (`admin-dashboard` and `permissions` test files only). It comes from Prisma's pg adapter, not app code, and doesn't fail anything.
 
