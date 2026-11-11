@@ -1,7 +1,7 @@
-// Part 2 and Part 4 end-to-end flows against a PR's PREVIEW deployment. It
-// WRITES data (posts and claims shifts, uploads and approves a credential), so
-// before any request it checks with Vercel that the deployment is not
-// production and that Neon gave it its own branch.
+// Part 2, Part 4 and Part 5 end-to-end flows against a PR's PREVIEW
+// deployment. It WRITES data (posts and claims shifts, uploads and approves a
+// credential), so before any request it checks with Vercel that the
+// deployment is not production and that Neon gave it its own branch.
 // Production gets only `npm run smoke` (docs/plan.md, Part 2 notes).
 //
 // Usage: npm run preview-flow -- <preview-deployment-url>
@@ -338,6 +338,73 @@ await step("pages render: /shifts has the credential upload test IDs for James",
   for (const id of ["credential-upload-input", "credential-expiry-date-input"]) {
     assert(page.text.includes(`data-testid="${id}"`), `/shifts: no ${id}`);
   }
+});
+
+// --- Part 5: timesheets -------------------------------------------------------
+// Scheduled hours from filled shifts, scoped by role. Uses a shift of its own
+// (not shift-3, which other parts' steps may claim), so it holds whatever ran
+// before it.
+console.log("Part 5: timesheets");
+
+type SheetShift = { id: string; agencyId: string; claimedBy: string; scheduledMinutes: number; scheduledHours: number };
+type Sheet = { nurseId: string; totalScheduledMinutes: number; totalScheduledHours: number; shifts: SheetShift[] };
+
+async function sheets(who: Who): Promise<Sheet[]> {
+  const r = await api(who, "GET", "/api/timesheets");
+  assert(r.status === 200, `${who}: ${r.status} ${r.text}`);
+  const list = r.json.timesheets as Sheet[];
+  for (const sheet of list) {
+    const sum = sheet.shifts.reduce((total, s) => total + s.scheduledMinutes, 0);
+    assert(sheet.totalScheduledMinutes === sum, `${who}: ${sheet.nurseId} total ${sheet.totalScheduledMinutes} ≠ ${sum}`);
+  }
+  return list;
+}
+const mariaIn = (list: Sheet[]) => list.find((s) => s.nurseId === "nurse-1");
+
+let agencyBShift = "";
+await step("agency-b posts a 12 h shift and Maria claims it → 200", async () => {
+  const posted = await api("agencyB", "POST", "/api/shifts", { role: "RN", date: "2026-12-10", startTime: "07:00", endTime: "19:00" });
+  assert(posted.status === 201, `post ${posted.status} ${posted.text}`);
+  agencyBShift = posted.json.id as string;
+  const r = await api("maria", "POST", `/api/shifts/${agencyBShift}/claim`);
+  assert(r.status === 200 && r.json.claimedBy === "nurse-1", `${r.status} ${r.text}`);
+  console.log(`        (posted and claimed ${agencyBShift})`);
+});
+
+await step("Maria's timesheet: shift-1 (19:00–07:00) and shift-2 are 12 h each, with agency-b's shift; the total adds up", async () => {
+  const list = await sheets("maria");
+  assert(same(list.map((s) => s.nurseId), ["nurse-1"]), `nurses ${list.map((s) => s.nurseId)}`);
+  const hours = (id: string) => list[0].shifts.find((s) => s.id === id);
+  for (const id of ["shift-1", "shift-2", agencyBShift]) {
+    const s = hours(id);
+    assert(s && s.scheduledMinutes === 720 && s.scheduledHours === 12, `${id}: ${JSON.stringify(s)}`);
+  }
+  console.log(`        (Maria: ${list[0].shifts.length} shifts, ${list[0].totalScheduledHours} h)`);
+});
+
+await step("each agency counts only its own shifts: Maria's agency-b hours are not in her agency-a total", async () => {
+  const [mine, a, b, all] = await Promise.all([sheets("maria"), sheets("agencyA"), sheets("agencyB"), sheets("alex")]);
+  for (const [list, agencyId] of [[a, "agency-a"], [b, "agency-b"]] as const) {
+    for (const s of list.flatMap((x) => x.shifts)) assert(s.agencyId === agencyId, `${agencyId} sees ${s.id} of ${s.agencyId}`);
+  }
+  const [mariaA, mariaB, mariaAll, mariaOwn] = [mariaIn(a), mariaIn(b), mariaIn(all), mariaIn(mine)];
+  assert(mariaA && mariaB && mariaAll && mariaOwn, "Maria missing from a timesheet");
+  assert(!mariaA.shifts.some((s) => s.id === agencyBShift), `agency-a shows ${agencyBShift}`);
+  assert(mariaB.shifts.some((s) => s.id === agencyBShift), `agency-b doesn't show ${agencyBShift}`);
+  const sum = mariaA.totalScheduledMinutes + mariaB.totalScheduledMinutes;
+  assert(sum === mariaOwn.totalScheduledMinutes && sum === mariaAll.totalScheduledMinutes, `a ${mariaA.totalScheduledMinutes} + b ${mariaB.totalScheduledMinutes} vs own ${mariaOwn.totalScheduledMinutes}, admin ${mariaAll.totalScheduledMinutes}`);
+});
+
+await step("James's timesheet is his own only", async () => {
+  const list = await sheets("james");
+  assert(same(list.map((s) => s.nurseId), ["nurse-2"]), `nurses ${list.map((s) => s.nurseId)}`);
+});
+
+await step("pages render: /timesheets has the timesheet-table and the scheduled-hours label", async () => {
+  const page = await request("GET", "/timesheets", { cookie: `shiftpatch_token=${tokens.maria}` });
+  assert(page.status === 200, `/timesheets ${page.status}`);
+  assert(page.text.includes('data-testid="timesheet-table"'), "/timesheets: no timesheet-table");
+  assert(page.text.includes("Scheduled hours — not actual time worked"), "/timesheets: no scheduled-hours label");
 });
 
 console.log(failures === 0 ? "Preview flow passed." : `Preview flow FAILED (${failures}).`);

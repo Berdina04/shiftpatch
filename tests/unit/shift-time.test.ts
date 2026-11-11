@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { dateOnly, isCalendarDate, isoDate, shiftEndDate, shiftsOverlap } from "@/lib/shift-time";
+import {
+  dateOnly,
+  formatMinutes,
+  isCalendarDate,
+  isoDate,
+  minutesToHours,
+  shiftEndDate,
+  shiftMinutes,
+  shiftsOverlap,
+} from "@/lib/shift-time";
 
 const shift = (date: string, startTime: string, endTime: string) => ({ date: dateOnly(date), startTime, endTime });
 
@@ -46,4 +55,39 @@ describe("isCalendarDate", () => {
   it.each(["2026-02-30", "2026-13-01", "10/05/2026", "2026-10-5", "0000-01-01", ""])("rejects %j", (d) =>
     expect(isCalendarDate(d)).toBe(false),
   );
+});
+
+describe("shiftMinutes (scheduled length)", () => {
+  it("19:00–07:00 counts as 12 h: shift-1 and shift-3 are overnight (spec)", () => {
+    expect(shiftMinutes(shift("2026-10-02", "19:00", "07:00"))).toBe(720);
+  });
+  it("07:00–19:00 is 12 h: shift-2 (spec)", () => {
+    expect(shiftMinutes(shift("2026-10-03", "07:00", "19:00"))).toBe(720);
+  });
+  it.each([
+    ["22:00", "06:30", 510],
+    ["23:59", "00:00", 1],
+    ["00:00", "23:59", 1439],
+    ["07:01", "07:00", 1439],
+  ])("%s–%s is %i minutes", (start, end, minutes) => expect(shiftMinutes(shift("2026-12-31", start, end))).toBe(minutes));
+});
+
+describe("minutesToHours", () => {
+  it.each([
+    [720, 12],
+    [510, 8.5],
+    [710, 11.83],
+    [1, 0.02],
+    [0, 0],
+  ])("%i minutes → %d h", (minutes, hours) => expect(minutesToHours(minutes)).toBe(hours));
+});
+
+describe("formatMinutes", () => {
+  it.each([
+    [720, "12 h"],
+    [1440, "24 h"],
+    [690, "11 h 30 min"],
+    [5, "0 h 5 min"],
+    [0, "0 h"],
+  ])("%i → %s", (minutes, text) => expect(formatMinutes(minutes)).toBe(text));
 });

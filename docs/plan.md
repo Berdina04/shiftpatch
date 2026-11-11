@@ -12,7 +12,7 @@ Budget: 8 hours this week, no buffer. Every part ends deployed and working end t
 | 2 — Posting and claiming | **Done, merged ([PR #2](https://github.com/Berdina04/shiftpatch/pull/2)).** Production serves `main` (`691542c`): its build applied the Part 2 migration, and `npm run smoke -- https://shiftpatch-phi.vercel.app` passes (13 checks, including the agency route and its 403s); the smoke check's denied requests appear in the production logs as `request.denied` lines. CI was green on PR #2. The full flow (`npm run preview-flow`) passed on the PR's preview, on its own Neon branch, at `fbd40b0`. The previews for the review fixes never built: Neon's "Create database branch for deployment" step timed out twice, with no incident on Neon's or Vercel's status pages. So the review fixes were checked locally, in CI and by the production smoke check only. |
 | 3 — Cancel/no-show, admin, audit | **Done in [PR #4](https://github.com/Berdina04/shiftpatch/pull/4).** CI green at `5263d71`. Preview check on PR #4's latest preview (`shiftpatch-k1wpo885f`, commit `5263d71`, on its own Neon branch `br-aged-lab-bcnlz4op`): `npm run preview-flow` passed (16 checks), and agency-a marking `shift-2` as a no-show returned 200 with the spec's body. Locally: typecheck, ESLint, Vitest (228 tests), build and Playwright (6 passed). Review ([reviews/part-3.md](reviews/part-3.md)): findings 2–4 fixed, finding 1 accepted as a known limitation (see notes). Production gets only the read-only smoke check after merge. |
 | 4 — Credentials | **Done, merged ([PR #5](https://github.com/Berdina04/shiftpatch/pull/5)).** Production (https://shiftpatch-phi.vercel.app) serves `main` (`4c5d3b4`): its build applied the Part 4 migration (`20261111090000_credential_files`), and `npm run smoke -- https://shiftpatch-phi.vercel.app` passes (21 checks, including the credential lists per role and the file route's 403/404s). CI was green on PR #5's last commit (`35a8ff6`) and on the review fixes (`833d0fe`). Review ([reviews/part-4.md](reviews/part-4.md)): findings 1–3 fixed. Preview checks, both on PR #5's own Neon branch `br-noisy-fire-bc171521`: `npm run preview-flow` passed at `2ee26ae` (29 checks), and read-only checks passed at `833d0fe` (`preview-flow` wasn't rerun, because the Neon branch kept the first run's data). |
-| 5 — Timesheets | Not started |
+| 5 — Timesheets | **Done in [PR #7](https://github.com/Berdina04/shiftpatch/pull/7), not merged (waiting for the owner's approval).** CI green at `0e03923`. Preview check on PR #7's preview (`shiftpatch-oi2rrsyls`, commit `0e03923`, on its own Neon branch `br-green-band-bc993pt5`): `npm run preview-flow` passed (34 checks: Part 2's 16, Part 4's 13 and Part 5's 5), including Maria's 12 h for `shift-1` and `shift-2` and agency totals that leave out the other agency's hours. Locally at `0e03923`: typecheck, ESLint, Vitest (357 tests), build, Playwright (14 passed), and `npm run smoke` against a local production build (28 checks). No migration; production gets only the read-only smoke check after merge. |
 
 Part 1 notes:
 - Neon preview branching is on: each preview deployment gets its own Neon branch, so `scripts/vercel-build.sh` runs migrations and the seed on every deployment.
@@ -113,6 +113,27 @@ Part 4 notes:
     - Review fixes: the upload response appended again, the page's first date kept, or the file served as an `attachment`: each fails its new Playwright test. The default headless shell (no PDF viewer) fails the PDF check. A stricter policy (`default-src 'none'; sandbox`) still shows both files in Chrome, but fails the pinned-policy Vitest test.
   - Rollback tests make the `CredentialFile` insert or the `AuditLog` insert fail with a temporary trigger.
 - Open: Vitest prints a `pg` deprecation warning ("client.query() when the client is already executing a query") from the Part 3 dashboard query (`admin-dashboard` and `permissions` test files only). It comes from Prisma's pg adapter, not app code, and doesn't fail anything.
+
+Part 5 notes:
+- Approved additions beyond the plan (2026-11-11):
+  - `GET /api/timesheets` (any logged-in role) → `{ timesheets: [{ nurseId, nurseName, totalScheduledMinutes, totalScheduledHours, shifts }] }`; each shift is the spec's shift shape plus `scheduledMinutes` and `scheduledHours` ([lib/timesheets.ts](../lib/timesheets.ts)).
+    - Nurse: their own timesheet, always exactly one (0 h if they hold nothing).
+    - Agency: its own shifts only. A nurse's total there counts only that agency's shifts, so hours at another agency never show up (the owner's change to the design).
+    - Admin: every nurse who holds a shift.
+    - Nurses by name, then id; each nurse's shifts by start.
+  - A shift counts while it is filled, past or upcoming; a cancelled shift drops out. One query, so rows and totals always agree.
+  - Hours: end − start, plus 24 h for an overnight shift, from the same interval as the overlap check. No time-zone or DST adjustment (the spec's times are facility-local). Minutes are exact; hours are rounded to 2 decimals. The page shows "12 h" or "11 h 30 min".
+  - `/timesheets` page (`timesheet-table`), labelled "Scheduled hours — not actual time worked". It's read on each page load, with no 10 s polling: it's a summary, not a list anyone acts on.
+  - Header links on every page: the role's home ("Shifts", "Your shifts" or "Dashboard") and "Timesheets". The header wraps on narrow screens.
+  - `npm run smoke` adds read-only timesheet checks (shape, each role's scope, hours add up, the page renders). `npm run preview-flow` runs Part 5 steps after Part 4's, on a shift of their own, because Part 4's steps claim `shift-3`.
+- Built from `main` while PR #5 (Part 4) was open. PR #5 merged meanwhile, so `main` was merged into the branch (`0e03923`). The conflicts were add-only; both parts' additions are kept.
+- Tests:
+  - Checked by breaking the code they guard:
+    - No agency filter: 3 integration tests fail.
+    - Overnight shifts not given +24 h: 10 tests fail (unit and integration).
+    - No `status = 'filled'` filter: nothing fails. The CHECK `("status" = 'filled') = ("claimedById" IS NOT NULL)` already means only filled shifts have a claimant; the filter only states the intent.
+  - Locally, the tests ran on their own database, `shiftpatch_part5_test`, because the local Postgres container is shared with other worktrees.
+- Known limitation: on a phone, the timesheet table scrolls sideways to reach the hours column, like the admin tables. UI polish is first on the cut list.
 
 ## Spec gaps and how we resolve them
 

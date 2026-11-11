@@ -1,5 +1,6 @@
-// Every Part 2, 3 and 4 route × every seed role (plan.md, "Verified by:
-// Permissions"); for cancel, also × each reason.
+// Every Part 2, 3, 4 and 5 route × every seed role (plan.md, "Verified by:
+// Permissions"); for cancel, also × each reason. Timesheet scoping (what
+// each role sees, not whether it may ask): timesheets.test.ts.
 // 401 without a token is covered for every route by route-auth.test.ts.
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { db, resetToSeed } from "../support/db";
@@ -15,6 +16,7 @@ import {
   listShifts,
   postShift,
   reviewCredential,
+  timesheets,
   tokenFor,
   uploadCredential,
   uploadedCredentialId,
@@ -141,6 +143,12 @@ const matrix: Row[] = [
     route: "POST /api/credentials/<James's upload>/review approved",
     call: async (t) => reviewCredential(t, await uploadedCredentialId(tokens.james), { decision: "approved" }),
     expected: { agencyA: [403, NOT_ADMIN_REVIEW], agencyB: [403, NOT_ADMIN_REVIEW], maria: [403, NOT_ADMIN_REVIEW], james: [403, NOT_ADMIN_REVIEW], alex: [200, OK] },
+  },
+  // Timesheets (plan.md, Part 5): every role may read its own scope.
+  {
+    route: "GET /api/timesheets",
+    call: (t) => timesheets(t),
+    expected: { agencyA: [200, OK], agencyB: [200, OK], maria: [200, OK], james: [200, OK], alex: [200, OK] },
   },
 ];
 
