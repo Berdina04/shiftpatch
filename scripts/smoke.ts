@@ -1,7 +1,8 @@
 // Read-only smoke check for a deployed ShiftPatch (plan.md: production gets
 // no data-changing tests). Logs in every seed user, reads the shift list, the
-// agency-scoped lists and each role's timesheets. Only GETs after login: never
-// posts or claims.
+// agency-scoped lists, the credential lists and each role's timesheets, and
+// checks who may open a credential file. Only GETs after login: never posts,
+// claims or uploads.
 // Usage: npm run smoke -- https://your-app.vercel.app
 export {};
 
@@ -141,6 +142,62 @@ await check("admin reads an agency's shifts", async () => {
   const res = await getAs("admin-1", "/api/agencies/agency-b/shifts");
   assert(res.status === 200, `status ${res.status}`);
 });
+
+// --- Credentials (Part 4) -----------------------------------------------------
+const CREDENTIAL_STATUS_KEYS = ["expiresOn", "id", "nurseId", "nurseName", "status"];
+type Cred = { id: string; nurseId: string; status: string; expiresOn: string; file?: unknown };
+const SEED_CREDENTIALS = [
+  { id: "cred-nurse-1", nurseId: "nurse-1", expiresOn: "2027-01-01", status: "approved" },
+  { id: "cred-nurse-2", nurseId: "nurse-2", expiresOn: "2026-06-01", status: "approved" },
+];
+
+for (const nurse of ["nurse-1", "nurse-2"]) {
+  await check(`${nurse} lists only their own credentials, with the seeded one approved`, async () => {
+    const res = await getAs(nurse, "/api/credentials");
+    assert(res.status === 200, `status ${res.status}`);
+    const { credentials } = (await res.json()) as { credentials: Cred[] };
+    assert(credentials.every((c) => c.nurseId === nurse), "another nurse's credential is listed");
+    const seed = SEED_CREDENTIALS.find((c) => c.nurseId === nurse)!;
+    const found = credentials.find((c) => c.id === seed.id);
+    assert(found, `${seed.id} missing`);
+    for (const [k, v] of Object.entries(seed)) assert(found[k as keyof Cred] === v, `${seed.id}.${k} = ${found[k as keyof Cred]}`);
+    assert(found.file === null, `${seed.id} has a file`);
+  });
+}
+
+for (const agencyId of ["agency-a", "agency-b"]) {
+  await check(`${agencyId} sees credential statuses only (no file details)`, async () => {
+    const res = await getAs(agencyId, "/api/credentials");
+    assert(res.status === 200, `status ${res.status}`);
+    const { credentials } = (await res.json()) as { credentials: Cred[] };
+    for (const c of credentials) assert(same(Object.keys(c).sort(), CREDENTIAL_STATUS_KEYS), `${c.id} keys ${Object.keys(c)}`);
+    for (const seed of SEED_CREDENTIALS) assert(credentials.some((c) => c.id === seed.id), `${seed.id} missing`);
+  });
+}
+
+await check("admin lists every credential, with the server's date", async () => {
+  const res = await getAs("admin-1", "/api/credentials");
+  assert(res.status === 200, `status ${res.status}`);
+  const { credentials, today } = (await res.json()) as { credentials: Cred[]; today: string };
+  for (const seed of SEED_CREDENTIALS) assert(credentials.some((c) => c.id === seed.id), `${seed.id} missing`);
+  // The server's UTC date; a day either way allows for a check run at midnight.
+  const days = Math.abs(Date.parse(today) - Date.parse(new Date().toISOString().slice(0, 10))) / 86_400_000;
+  assert(/^\d{4}-\d{2}-\d{2}$/.test(today) && days <= 1, `today ${today}`);
+});
+
+const FILE_FORBIDDEN = "Only the nurse who uploaded it and the admin can open this file";
+for (const [userId, status, error] of [
+  ["agency-a", 403, FILE_FORBIDDEN],
+  ["nurse-2", 403, FILE_FORBIDDEN],
+  ["nurse-1", 404, "Credential has no file"],
+] as const) {
+  await check(`${userId} opening cred-nurse-1's file is ${status}`, async () => {
+    const res = await getAs(userId, "/api/credentials/cred-nurse-1/file");
+    assert(res.status === status, `status ${res.status}`);
+    const body = await res.json();
+    assert(same(body, { error }), `body ${JSON.stringify(body)}`);
+  });
+}
 
 // --- Part 5: timesheets (read-only; checks rules, not what is filled) --------
 const SHEET_KEYS = ["nurseId", "nurseName", "shifts", "totalScheduledHours", "totalScheduledMinutes"];

@@ -29,6 +29,11 @@ export function startOfTodayUtc(now = new Date()): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
+/** Today (UTC) as YYYY-MM-DD. */
+export function todayIsoUtc(now = new Date()): string {
+  return isoDate(startOfTodayUtc(now));
+}
+
 export type ShiftTimes = { date: Date; startTime: string; endTime: string };
 
 function minutesOf(hhmm: string): number {

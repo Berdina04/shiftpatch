@@ -1,11 +1,26 @@
-// Every Part 2, 3 and 5 route × every seed role (plan.md, "Verified by:
+// Every Part 2, 3, 4 and 5 route × every seed role (plan.md, "Verified by:
 // Permissions"); for cancel, also × each reason. Timesheet scoping (what
 // each role sees, not whether it may ask): timesheets.test.ts.
 // 401 without a token is covered for every route by route-auth.test.ts.
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { db, resetToSeed } from "../support/db";
 import { cancellationRows } from "../support/fixtures";
-import { adminDashboard, agencyShifts, cancel, claim, EMAILS, listShifts, postShift, timesheets, tokenFor } from "../support/http";
+import {
+  adminDashboard,
+  agencyShifts,
+  cancel,
+  claim,
+  credentialFile,
+  EMAILS,
+  listCredentials,
+  listShifts,
+  postShift,
+  reviewCredential,
+  timesheets,
+  tokenFor,
+  uploadCredential,
+  uploadedCredentialId,
+} from "../support/http";
 
 type Who = keyof typeof EMAILS;
 const tokens = {} as Record<Who, string>;
@@ -25,6 +40,10 @@ const OTHER_AGENCY = "You can only cancel your own agency's shifts";
 const NOT_YOURS = "You can only cancel your own shifts";
 const NOT_CLAIMED = "Shift is not claimed";
 const NOT_ADMIN = "Only the admin can view the dashboard";
+const NOT_NURSE_UPLOAD = "Only nurses can upload credentials";
+const FILE_FORBIDDEN = "Only the nurse who uploaded it and the admin can open this file";
+const NO_FILE = "Credential has no file";
+const NOT_ADMIN_REVIEW = "Only the admin can review credentials";
 
 /** Gives agency-b a claimed shift: Maria holds shift-3. */
 async function mariaHoldsShift3() {
@@ -98,6 +117,33 @@ const matrix: Row[] = [
     call: (t) => adminDashboard(t),
     expected: { agencyA: [403, NOT_ADMIN], agencyB: [403, NOT_ADMIN], maria: [403, NOT_ADMIN], james: [403, NOT_ADMIN], alex: [200, OK] },
   },
+  // Credentials (plan.md, Part 4): nurses upload; the owning nurse and the
+  // admin open files; agencies see the status only; the admin reviews.
+  {
+    route: "POST /api/credentials",
+    call: (t) => uploadCredential(t),
+    expected: { agencyA: [403, NOT_NURSE_UPLOAD], agencyB: [403, NOT_NURSE_UPLOAD], maria: [201, OK], james: [201, OK], alex: [403, NOT_NURSE_UPLOAD] },
+  },
+  {
+    route: "GET /api/credentials",
+    call: (t) => listCredentials(t),
+    expected: { agencyA: [200, OK], agencyB: [200, OK], maria: [200, OK], james: [200, OK], alex: [200, OK] },
+  },
+  {
+    route: "GET /api/credentials/<Maria's upload>/file",
+    call: async (t) => credentialFile(t, await uploadedCredentialId(tokens.maria)),
+    expected: { agencyA: [403, FILE_FORBIDDEN], agencyB: [403, FILE_FORBIDDEN], maria: [200, OK], james: [403, FILE_FORBIDDEN], alex: [200, OK] },
+  },
+  {
+    route: "GET /api/credentials/cred-nurse-1/file (seeded, no file)",
+    call: (t) => credentialFile(t, "cred-nurse-1"),
+    expected: { agencyA: [403, FILE_FORBIDDEN], agencyB: [403, FILE_FORBIDDEN], maria: [404, NO_FILE], james: [403, FILE_FORBIDDEN], alex: [404, NO_FILE] },
+  },
+  {
+    route: "POST /api/credentials/<James's upload>/review approved",
+    call: async (t) => reviewCredential(t, await uploadedCredentialId(tokens.james), { decision: "approved" }),
+    expected: { agencyA: [403, NOT_ADMIN_REVIEW], agencyB: [403, NOT_ADMIN_REVIEW], maria: [403, NOT_ADMIN_REVIEW], james: [403, NOT_ADMIN_REVIEW], alex: [200, OK] },
+  },
   // Timesheets (plan.md, Part 5): every role may read its own scope.
   {
     route: "GET /api/timesheets",
@@ -130,6 +176,17 @@ describe("permissions: route × role", () => {
     expect([shift2.status, shift2.claimedById]).toStrictEqual(["filled", "nurse-1"]);
     expect(await cancellationRows()).toStrictEqual([]);
     expect(await db().auditLog.count()).toBe(0);
+  });
+
+  it("a denied upload or review changes nothing", async () => {
+    const id = await uploadedCredentialId(tokens.james);
+    await uploadCredential(tokens.agencyA);
+    await uploadCredential(tokens.alex);
+    await reviewCredential(tokens.james, id, { decision: "approved" });
+    await reviewCredential(tokens.agencyA, id, { decision: "rejected", reason: "x" });
+    expect(await db().credential.count()).toBe(3); // the seed's two + James's upload
+    expect((await db().credential.findUniqueOrThrow({ where: { id } })).status).toBe("pending");
+    expect(await db().auditLog.count()).toBe(1); // the upload
   });
 
   it("the role comes from the database, not the token", async () => {

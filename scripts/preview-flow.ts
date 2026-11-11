@@ -1,7 +1,7 @@
-// Part 2 and Part 5 end-to-end flows against a PR's PREVIEW deployment. It
-// WRITES data (posts and claims shifts), so before any request it checks with
-// Vercel that the deployment is not production and that Neon gave it its own
-// branch.
+// Part 2, Part 4 and Part 5 end-to-end flows against a PR's PREVIEW
+// deployment. It WRITES data (posts and claims shifts, uploads and approves a
+// credential), so before any request it checks with Vercel that the
+// deployment is not production and that Neon gave it its own branch.
 // Production gets only `npm run smoke` (docs/plan.md, Part 2 notes).
 //
 // Usage: npm run preview-flow -- <preview-deployment-url>
@@ -14,6 +14,9 @@
 // so a rerun fails the spec steps (shift-1 is already claimed). From 2027-01-01
 // Maria's seeded credential has expired, so her claim steps get 403.
 import { execFile } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const target = (process.argv[2] ?? "").replace(/\/$/, "");
 const scope = process.env.VERCEL_SCOPE ?? "berdina04s-projects";
@@ -58,8 +61,14 @@ if (!neonBranch) {
 // --- HTTP through `vercel curl` ----------------------------------------------
 type Reply = { status: number; json: Record<string, unknown>; text: string };
 
-async function request(method: string, path: string, headers: Record<string, string>, body?: string): Promise<Reply> {
-  const args = ["curl", `${target}${path}`, "--", "-s", "-i", "-X", method];
+async function request(
+  method: string,
+  urlPath: string,
+  headers: Record<string, string>,
+  body?: string,
+  curlArgs: string[] = [],
+): Promise<Reply> {
+  const args = ["curl", `${target}${urlPath}`, "--", "-s", "-i", "-X", method, ...curlArgs];
   for (const [k, v] of Object.entries(headers)) args.push("-H", `${k}: ${v}`);
   if (body !== undefined) args.push("--data-binary", "@-");
   let rest = await vercel(args, body);
@@ -211,6 +220,124 @@ await step("pages render: /shifts has claim buttons for Maria, /agency has the p
   const agency = await request("GET", "/agency", { cookie: `shiftpatch_token=${tokens.agencyA}` });
   assert(agency.status === 200, `/agency ${agency.status}`);
   assert(agency.text.includes('data-testid="agency-post-shift-button"'), "/agency: no agency-post-shift-button");
+});
+
+// --- Part 4: credentials with admin approval ---------------------------------
+console.log("Part 4: credentials");
+
+const PDF = "%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [] /Count 0 >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n";
+const dir = mkdtempSync(join(tmpdir(), "shiftpatch-preview-"));
+function tempFile(name: string, content: string | Buffer): string {
+  const file = join(dir, name);
+  writeFileSync(file, content);
+  return file;
+}
+const pdfFile = tempFile("james-licence.pdf", PDF);
+
+/** POST /api/credentials as multipart/form-data, like the upload form. */
+function upload(who: Who, file: string, expiresOn: string): Promise<Reply> {
+  return request("POST", "/api/credentials", { authorization: `Bearer ${tokens[who]}` }, undefined, [
+    "-F",
+    `file=@${file};type=application/pdf`,
+    "-F",
+    `expiresOn=${expiresOn}`,
+  ]);
+}
+
+let credential = "";
+await step("James uploads a credential → 201 pending, with its file", async () => {
+  const r = await upload("james", pdfFile, "2028-01-01");
+  assert(r.status === 201, `status ${r.status} ${r.text}`);
+  credential = r.json.id as string;
+  assert(/^cred-\d+$/.test(credential), `id ${credential}`);
+  assert(r.json.status === "pending" && r.json.nurseId === "nurse-2" && r.json.expiresOn === "2028-01-01", `body ${r.text}`);
+  assert(
+    same(r.json.file, { fileName: "james-licence.pdf", contentType: "application/pdf", size: Buffer.byteLength(PDF) }),
+    `file ${JSON.stringify(r.json.file)}`,
+  );
+  console.log(`        (uploaded ${credential})`);
+});
+
+await step("James is still blocked: claim shift-3 → 403 'Credential expired, cannot claim shift'", async () => {
+  const r = await api("james", "POST", "/api/shifts/shift-3/claim");
+  assert(r.status === 403 && same(r.json, { error: "Credential expired, cannot claim shift" }), `${r.status} ${r.text}`);
+});
+
+const FILE_FORBIDDEN = "Only the nurse who uploaded it and the admin can open this file";
+await step("agency-a and Maria opening James's file → 403", async () => {
+  for (const who of ["agencyA", "maria"] as const) {
+    const r = await api(who, "GET", `/api/credentials/${credential}/file`);
+    assert(r.status === 403 && same(r.json, { error: FILE_FORBIDDEN }), `${who}: ${r.status} ${r.text}`);
+  }
+});
+
+await step("an agency gets 403 for a credential with no file too (permission before existence)", async () => {
+  const r = await api("agencyB", "GET", "/api/credentials/cred-nurse-1/file");
+  assert(r.status === 403 && same(r.json, { error: FILE_FORBIDDEN }), `${r.status} ${r.text}`);
+});
+
+await step("James and the admin open the file → 200, the same bytes, private", async () => {
+  for (const who of ["james", "alex"] as const) {
+    const r = await api(who, "GET", `/api/credentials/${credential}/file`);
+    assert(r.status === 200 && r.text === PDF, `${who}: ${r.status}`);
+  }
+});
+
+await step("agency-b sees the new credential's status only", async () => {
+  const r = await api("agencyB", "GET", "/api/credentials");
+  assert(r.status === 200, `status ${r.status}`);
+  const row = (r.json.credentials as { id: string }[]).find((c) => c.id === credential);
+  assert(
+    same(row, { id: credential, nurseId: "nurse-2", nurseName: "James Cook", expiresOn: "2028-01-01", status: "pending" }),
+    `row ${JSON.stringify(row)}`,
+  );
+});
+
+await step("4 MB + 1 byte reaches the route → 400 'File must be 4 MB or smaller'", async () => {
+  const big = Buffer.alloc(4 * 1024 * 1024 + 1);
+  big.write(PDF);
+  const r = await upload("james", tempFile("big.pdf", big), "2028-01-01");
+  assert(r.status === 400 && same(r.json, { error: "File must be 4 MB or smaller" }), `${r.status} ${r.text.slice(0, 200)}`);
+});
+
+await step("a 5 MB body is refused by Vercel before the route runs (why the form checks the size first)", async () => {
+  const huge = Buffer.alloc(5 * 1024 * 1024);
+  huge.write(PDF);
+  const r = await upload("james", tempFile("huge.pdf", huge), "2028-01-01");
+  assert(r.status === 413, `status ${r.status} ${r.text.slice(0, 200)}`);
+  console.log(`        (Vercel: ${r.status} ${r.text.slice(0, 80).replace(/\s+/g, " ")})`);
+});
+
+await step("the admin's review queue has it; the admin approves → 200; a second review → 409", async () => {
+  const queue = await api("alex", "GET", "/api/credentials?status=pending");
+  assert(queue.status === 200, `queue ${queue.status}`);
+  assert((queue.json.credentials as { id: string }[]).some((c) => c.id === credential), "not in the queue");
+  const r = await api("alex", "POST", `/api/credentials/${credential}/review`, { decision: "approved" });
+  assert(r.status === 200 && r.json.status === "approved", `${r.status} ${r.text}`);
+  const again = await api("alex", "POST", `/api/credentials/${credential}/review`, { decision: "rejected", reason: "late" });
+  assert(again.status === 409 && same(again.json, { error: "Credential already reviewed" }), `${again.status} ${again.text}`);
+});
+
+await step("James claims shift-3 → 200", async () => {
+  const r = await api("james", "POST", "/api/shifts/shift-3/claim");
+  assert(r.status === 200 && r.json.claimedBy === "nurse-2" && r.json.status === "filled", `${r.status} ${r.text}`);
+});
+
+await step("the audit log has the upload and the approval", async () => {
+  const r = await api("alex", "GET", "/api/admin/dashboard");
+  assert(r.status === 200, `status ${r.status}`);
+  const actions = (r.json.auditLog as { action: string; credentialId: string | null }[])
+    .filter((e) => e.credentialId === credential)
+    .map((e) => e.action);
+  assert(same(actions, ["credential.approved", "credential.uploaded"]), `actions ${actions}`);
+});
+
+await step("pages render: /shifts has the credential upload test IDs for James", async () => {
+  const page = await request("GET", "/shifts", { cookie: `shiftpatch_token=${tokens.james}` });
+  assert(page.status === 200, `/shifts ${page.status}`);
+  for (const id of ["credential-upload-input", "credential-expiry-date-input"]) {
+    assert(page.text.includes(`data-testid="${id}"`), `/shifts: no ${id}`);
+  }
 });
 
 // --- Part 5: timesheets -------------------------------------------------------

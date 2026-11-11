@@ -343,3 +343,41 @@ button.secondary {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* Part 4: credentials. */
+
+.status-pending {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.status-approved {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.status-expired,
+.status-rejected {
+  color: var(--error);
+  border-color: var(--error);
+}
+
+.credential-form {
+  margin-top: 1rem;
+}
+
+.review-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.review-actions input {
+  padding: 0.35rem 0.5rem;
+  min-width: 12rem;
+}
+
+a {
+  color: var(--accent);
+}

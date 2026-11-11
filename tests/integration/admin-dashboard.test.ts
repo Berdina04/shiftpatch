@@ -96,6 +96,7 @@ describe("GET /api/admin/dashboard", () => {
       actorRole: "agency",
       action: "shift.cancelled",
       shiftId: "shift-2",
+      credentialId: null,
       details: { reason: "no-show", previousNurseId: "nurse-1", status: { from: "filled", to: "open" } },
     });
   });
