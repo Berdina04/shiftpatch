@@ -13,6 +13,7 @@ Stack: TypeScript, Next.js, Postgres (Neon), Prisma, custom JWT auth (bcrypt), V
 - Scope or decision changes: propose them and wait for approval before acting.
 - Before saying a task is done, run the checks and show their output.
 - Never commit secrets or `.env` files.
+- Never print files that hold credentials (`.env*`, `~/.npmrc`) to check a setting; show only whether it is set (e.g. `grep -c '^JWT_SECRET=' .env`).
 - Reviewing agents don't edit code: they write findings to `docs/reviews/<part>.md` (e.g. `docs/reviews/part-1.md`).
 - Ask the user before any decision that isn't in `docs/plan.md`, even a small addition.
 - If a tool asks for the user's consent (e.g. Prisma's `migrate reset`), stop and ask the user. Never work around it.

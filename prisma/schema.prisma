@@ -51,16 +51,37 @@ model User {
   createdAt DateTime @default(now())
 }
 
+// A nurse's licence. Uploads start `pending`; only `approved` ones count for
+// claims (plan.md, Part 4). Seeded credentials are approved and have no file.
+// New ids are cred-<n> from credential_id_seq; the seed inserts its own ids.
+// reviewedById has no foreign key to User, like AuditLog.
 model Credential {
-  id        String           @id
-  nurseId   String
-  nurse     User             @relation(fields: [nurseId], references: [id])
+  id              String           @id @default(dbgenerated("('cred-'::text || nextval('credential_id_seq'::regclass))"))
+  nurseId         String
+  nurse           User             @relation(fields: [nurseId], references: [id])
   // Last day is the day before expiresOn (plan.md: the expiry date itself is not valid).
-  expiresOn DateTime         @db.Date
-  status    CredentialStatus @default(pending)
-  createdAt DateTime         @default(now())
+  expiresOn       DateTime         @db.Date
+  status          CredentialStatus @default(pending)
+  createdAt       DateTime         @default(now())
+  reviewedById    String?
+  reviewedAt      DateTime?
+  rejectionReason String?
+  file            CredentialFile?
 
   @@index([nurseId])
+  @@index([status])
+}
+
+// The uploaded document, kept apart so lists never load its bytes. Written in
+// the same transaction as its Credential row (plan.md, Part 4). Only the
+// owning nurse and the admin can read it (lib/credentials.ts).
+model CredentialFile {
+  credentialId String     @id
+  credential   Credential @relation(fields: [credentialId], references: [id])
+  fileName     String
+  contentType  String // application/pdf | image/png | image/jpeg (CHECK constraint)
+  size         Int // bytes, 1..4 MB (CHECK constraint)
+  bytes        Bytes
 }
 
 // date/startTime/endTime are facility-local, as in the spec.
@@ -107,15 +128,18 @@ model ShiftCancellation {
 
 // Append-only record of successful changes, written in the same transaction
 // as the change itself (plan.md). Denied attempts go to server logs instead.
+// Each entry is about one shift or one credential (CHECK constraint).
 model AuditLog {
-  id        BigInt   @id @default(autoincrement())
-  createdAt DateTime @default(now())
-  actorId   String
-  actorRole Role
-  action    String // "shift.posted", "shift.claimed", "shift.cancelled"
-  shiftId   String
-  details   Json
+  id           BigInt   @id @default(autoincrement())
+  createdAt    DateTime @default(now())
+  actorId      String
+  actorRole    Role
+  action       String // "shift.posted|claimed|cancelled", "credential.uploaded|approved|rejected"
+  shiftId      String?
+  credentialId String?
+  details      Json
 
   @@index([shiftId])
+  @@index([credentialId])
   @@index([createdAt])
 }

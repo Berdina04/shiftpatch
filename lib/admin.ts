@@ -1,6 +1,6 @@
 // The admin dashboard (plan.md, Part 3): every shift, each shift's claimant
 // name and latest cancellation (the "reopened (…)" marker, kept after a
-// re-claim), and the newest audit entries.
+// re-claim), and the newest audit entries (shift and credential changes).
 // `shifts` keeps the spec's shift shape; the dashboard's extra fields are in
 // `shiftDetails`, keyed by shift id (review of Part 3, finding 4).
 import type { CancelReason } from "./cancel-reasons";
@@ -21,7 +21,9 @@ export type AuditEntryDto = {
   actorId: string;
   actorRole: Role;
   action: string;
-  shiftId: string;
+  // Exactly one is set: the entry is about a shift or a credential.
+  shiftId: string | null;
+  credentialId: string | null;
   details: unknown;
 };
 
@@ -84,6 +86,7 @@ export async function getAdminDashboard(): Promise<AdminDashboard> {
       actorRole: a.actorRole,
       action: a.action,
       shiftId: a.shiftId,
+      credentialId: a.credentialId,
       details: a.details,
     })),
   };

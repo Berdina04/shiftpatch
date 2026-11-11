@@ -21,7 +21,13 @@ export async function createNurse(
       role: "nurse",
       passwordHash: "not-a-real-hash",
       credentials: {
-        create: credentials.map((c, i) => ({ id: `${id}-cred-${i}`, status: c.status, expiresOn: dateOnly(c.expiresOn) })),
+        create: credentials.map((c, i) => ({
+          id: `${id}-cred-${i}`,
+          status: c.status,
+          expiresOn: dateOnly(c.expiresOn),
+          // A rejection always has a reason (CHECK constraint).
+          ...(c.status === "rejected" ? { rejectionReason: "test rejection", reviewedAt: new Date() } : {}),
+        })),
       },
     },
   });
@@ -52,9 +58,15 @@ export async function shiftRow(id: string) {
   return { status: s.status, claimedBy: s.claimedById };
 }
 
-export async function auditRows(where: { shiftId?: string; action?: string } = {}) {
+export async function auditRows(where: { shiftId?: string; credentialId?: string; action?: string } = {}) {
   const rows = await db().auditLog.findMany({ where, orderBy: { id: "asc" } });
-  return rows.map(({ actorId, actorRole, action, shiftId, details }) => ({ actorId, actorRole, action, shiftId, details }));
+  return rows.map(({ actorId, actorRole, action, shiftId, credentialId, details }) => ({
+    actorId,
+    actorRole,
+    action,
+    ...(credentialId === null ? { shiftId } : { credentialId }),
+    details,
+  }));
 }
 
 export async function cancellationRows(where: { shiftId?: string } = {}) {

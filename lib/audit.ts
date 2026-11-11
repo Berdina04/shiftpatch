@@ -3,14 +3,20 @@
 import type { Prisma } from "./generated/prisma/client";
 import type { Role } from "./generated/prisma/enums";
 
-export type AuditAction = "shift.posted" | "shift.claimed" | "shift.cancelled";
+export type AuditAction =
+  | "shift.posted"
+  | "shift.claimed"
+  | "shift.cancelled"
+  | "credential.uploaded"
+  | "credential.approved"
+  | "credential.rejected";
 
+/** Each entry is about one shift or one credential (a CHECK constraint enforces it). */
 export type AuditEntry = {
   actor: { id: string; role: Role };
   action: AuditAction;
-  shiftId: string;
   details: Prisma.InputJsonObject;
-};
+} & ({ shiftId: string; credentialId?: never } | { credentialId: string; shiftId?: never });
 
 export async function writeAudit(tx: Prisma.TransactionClient, entry: AuditEntry): Promise<void> {
   await tx.auditLog.create({
@@ -18,14 +24,15 @@ export async function writeAudit(tx: Prisma.TransactionClient, entry: AuditEntry
       actorId: entry.actor.id,
       actorRole: entry.actor.role,
       action: entry.action,
-      shiftId: entry.shiftId,
+      shiftId: entry.shiftId ?? null,
+      credentialId: entry.credentialId ?? null,
       details: entry.details,
     },
   });
 }
 
 /**
- * Options for every transaction that changes shifts. READ COMMITTED is
+ * Options for every transaction that changes shifts or credentials. READ COMMITTED is
  * Postgres's default, stated here because the claim relies on it: each
  * statement sees rows committed before it started.
  */

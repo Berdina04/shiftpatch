@@ -5,16 +5,22 @@ import { CancelControl, requestCancel } from "@/app/components/CancelControl";
 import { NotificationBanner, type Banner } from "@/app/components/NotificationBanner";
 import { ShiftTimes } from "@/app/components/ShiftTimes";
 import { useLiveShifts } from "@/app/components/useLiveShifts";
+import type { CredentialDto } from "@/lib/credentials";
 import type { ShiftDto } from "@/lib/shifts";
+import { MyCredentials } from "./MyCredentials";
 
 const NURSE_REASONS = ["advance"] as const; // nurses can't mark a no-show (plan.md)
 
+type Nurse = { id: string; credentials: CredentialDto[]; today: string };
+
 /**
- * The open-shift list, plus "My shifts" for a nurse (`nurseId`): claim from the
- * first, cancel in advance from the second. One 10 s poll of GET /api/shifts
- * feeds both.
+ * The open-shift list, plus "My shifts" and "My credentials" for a nurse:
+ * claim from the first, cancel in advance from the second, upload from the
+ * third. One 10 s poll of GET /api/shifts feeds the first two. One banner for
+ * the whole page.
  */
-export function ShiftBoard({ initialShifts, nurseId }: { initialShifts: ShiftDto[]; nurseId: string | null }) {
+export function ShiftBoard({ initialShifts, nurse }: { initialShifts: ShiftDto[]; nurse: Nurse | null }) {
+  const nurseId = nurse?.id ?? null;
   const { shifts, refresh, update } = useLiveShifts("/api/shifts", initialShifts);
   const [banner, setBanner] = useState<Banner | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -117,6 +123,8 @@ export function ShiftBoard({ initialShifts, nurseId }: { initialShifts: ShiftDto
           )}
         </section>
       )}
+
+      {nurse && <MyCredentials initial={nurse.credentials} today={nurse.today} onBanner={setBanner} />}
     </>
   );
 }
