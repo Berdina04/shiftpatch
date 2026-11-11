@@ -26,7 +26,10 @@ export default defineConfig({
     baseURL: `http://localhost:${PORT}`,
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // channel "chromium": full Chromium in new headless mode, which has Chrome's
+  // PDF viewer (the default headless shell downloads PDFs instead). The Part 4
+  // test opens an uploaded PDF (review of Part 4, finding 3).
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], channel: "chromium" } }],
   webServer: {
     command: `npx next start --port ${PORT}`,
     url: `http://localhost:${PORT}/login`,

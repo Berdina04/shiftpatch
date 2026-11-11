@@ -7,11 +7,13 @@ import { ShiftTimes } from "@/app/components/ShiftTimes";
 import { usePolled } from "@/app/components/useLiveShifts";
 import type { AdminDashboard as Dashboard, AuditEntryDto } from "@/lib/admin";
 import { CANCEL_REASONS, type CancelReason } from "@/lib/cancel-reasons";
+import type { CredentialDto } from "@/lib/credentials";
 import type { ShiftDto } from "@/lib/shifts";
+import { CredentialReview } from "./CredentialReview";
 
 const selectDashboard = (body: unknown) => body as Dashboard;
 
-export function AdminDashboard({ initial }: { initial: Dashboard }) {
+export function AdminDashboard({ initial, initialQueue }: { initial: Dashboard; initialQueue: CredentialDto[] }) {
   const { data, refresh } = usePolled("/api/admin/dashboard", initial, selectDashboard);
   const [banner, setBanner] = useState<Banner | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
@@ -96,6 +98,8 @@ export function AdminDashboard({ initial }: { initial: Dashboard }) {
         </div>
       </section>
 
+      <CredentialReview initial={initialQueue} onBanner={setBanner} onReviewed={refresh} />
+
       <section className="section">
         <h2>Audit log</h2>
         <p className="muted hint">Successful changes, newest first (up to the latest 100). Times are UTC.</p>
@@ -106,7 +110,7 @@ export function AdminDashboard({ initial }: { initial: Dashboard }) {
                 <th>Time</th>
                 <th>Actor</th>
                 <th>Action</th>
-                <th>Shift</th>
+                <th>Subject</th>
                 <th>Details</th>
               </tr>
             </thead>
@@ -125,7 +129,7 @@ export function AdminDashboard({ initial }: { initial: Dashboard }) {
                       {entry.actorId} ({entry.actorRole})
                     </td>
                     <td>{entry.action}</td>
-                    <td className="nowrap">{entry.shiftId}</td>
+                    <td className="nowrap">{entry.shiftId ?? entry.credentialId}</td>
                     <td>{describe(entry)}</td>
                   </tr>
                 ))
@@ -152,6 +156,12 @@ function describe(entry: AuditEntryDto): string {
       return `claimed by ${d.claimedBy}`;
     case "shift.cancelled":
       return `${d.reason} · previous nurse ${d.previousNurseId}`;
+    case "credential.uploaded":
+      return `uploaded by ${d.nurseId} · expires ${d.expiresOn} · ${d.fileName}`;
+    case "credential.approved":
+      return `approved · nurse ${d.nurseId}`;
+    case "credential.rejected":
+      return `rejected · nurse ${d.nurseId} · ${d.reason}`;
     default:
       return JSON.stringify(entry.details);
   }

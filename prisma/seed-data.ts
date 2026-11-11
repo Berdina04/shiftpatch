@@ -57,11 +57,12 @@ export async function seedDatabase(db: PrismaClient): Promise<void> {
 
 /**
  * Deletes all data and restores the trial-start seed. RESTART IDENTITY also
- * restarts shift_id_seq, so the next posted shift is shift-4 again.
+ * restarts shift_id_seq and credential_id_seq, so the next posted shift is
+ * shift-4 again and the next upload cred-1.
  */
 export async function resetDatabase(db: PrismaClient): Promise<void> {
   await db.$executeRawUnsafe(
-    'TRUNCATE TABLE "AuditLog", "ShiftCancellation", "Shift", "Credential", "User", "Agency" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "AuditLog", "ShiftCancellation", "Shift", "CredentialFile", "Credential", "User", "Agency" RESTART IDENTITY CASCADE',
   );
   await seedDatabase(db);
 }
